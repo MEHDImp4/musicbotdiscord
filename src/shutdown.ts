@@ -26,6 +26,9 @@ export function createShutdown({ client, players, logger }: ShutdownDeps) {
     }, HARD_TIMEOUT_MS);
 
     try {
+      // Persist any pending per-guild settings before tearing down.
+      players.flushSettings();
+
       // Send disconnect messages to active guilds (PROC-01)
       const activeGuildIds = players.activeGuildIds;
       if (activeGuildIds.length > 0) {

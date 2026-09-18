@@ -9,6 +9,12 @@ services:
     stop_grace_period: 15s
     env_file:
       - .env.docker
+    environment:
+      - DATA_DIR=/data
     volumes:
       - .:/app
       - /app/node_modules
+      - pulse-data:/data
+
+volumes:
+  pulse-data:

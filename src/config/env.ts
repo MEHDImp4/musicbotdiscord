@@ -42,6 +42,7 @@ export const env = {
   maxStreamRetries: intEnv("MAX_STREAM_RETRIES", 2),
   ytdlpPath: process.env.YTDLP_PATH?.trim() || "yt-dlp",
   ffmpegPath: process.env.FFMPEG_PATH?.trim() || "ffmpeg",
+  dataDir: process.env.DATA_DIR?.trim() || "data",
   ytdlpCookiesFile: process.env.YTDLP_COOKIES_FILE?.trim() || undefined,
   sponsorblockCategories: process.env.SPONSORBLOCK_CATEGORIES?.trim() ?? "sponsor,selfpromo",
   externalProcessTimeoutMs: intEnv("EXTERNAL_PROCESS_TIMEOUT_MS", 20_000),

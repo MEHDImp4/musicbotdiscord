@@ -1,17 +1,23 @@
+import { join } from "node:path";
 import type { Client } from "discord.js";
 import { env } from "../config/env";
 import type { AudioProvider } from "../providers/AudioProvider";
 import { logger } from "../utils/logger";
 import { GuildPlayer } from "./GuildPlayer";
+import { GuildSettingsStore, type GuildSettings } from "./GuildSettingsStore";
 import type { RequestedBy, Track } from "./Track";
 
 export class PlayerManager {
   private readonly players = new Map<string, GuildPlayer>();
+  private readonly settings: GuildSettingsStore;
 
   constructor(
     private readonly provider: AudioProvider,
     private readonly client?: Client,
-  ) {}
+  ) {
+    this.settings = new GuildSettingsStore(join(env.dataDir, "guild-settings.json"));
+    this.settings.load();
+  }
 
   get(guildId: string): GuildPlayer | undefined {
     return this.players.get(guildId);
@@ -29,6 +35,10 @@ export class PlayerManager {
       },
       (channelId, content) => {
         void this.notify(channelId, content);
+      },
+      this.settings.get(guildId),
+      (patch) => {
+        this.settings.update(guildId, patch);
       },
     );
     this.players.set(guildId, player);
@@ -56,6 +66,15 @@ export class PlayerManager {
   async destroyAll(): Promise<void> {
     await Promise.all([...this.players.values()].map((player) => player.destroy()));
     this.players.clear();
+  }
+
+  getGuildSettings(guildId: string): GuildSettings {
+    return this.settings.get(guildId);
+  }
+
+  /** Persists any pending guild settings immediately. */
+  flushSettings(): void {
+    this.settings.flush();
   }
 
   async resolveTrack(input: string, requestedBy: RequestedBy): Promise<Track> {

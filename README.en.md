@@ -105,6 +105,7 @@ All variables are optional unless stated otherwise.
 | `VOLUME_STEP` | `10` | Volume button step |
 | `AUTOCOMPLETE_ENABLED` | `true` | Autocomplete on `/play` |
 | `YTDLP_PATH` / `FFMPEG_PATH` | `yt-dlp` / `ffmpeg` | Binary paths |
+| `DATA_DIR` | `data` (`/data` in Docker) | Persistence directory for per-guild settings (volume) |
 
 ## 🐳 Docker
 

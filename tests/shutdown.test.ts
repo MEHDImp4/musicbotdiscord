@@ -16,6 +16,7 @@ function createMockPlayerManager(activeGuildIds: string[] = []) {
     activeGuildIds,
     destroyAll: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockReturnValue(null),
+    flushSettings: vi.fn(),
   };
 }
 

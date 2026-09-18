@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-user command cooldowns
 - Stream retry with channel notification, SponsorBlock, optional yt-dlp cookies
 - Automatic yt-dlp update on container start
+- Per-guild persistence of volume and loop mode (survives disconnects and restarts)
+- Auto-delete of transient bot confirmations (`AUTO_DELETE_SECONDS`)
 - Docker hardening: healthcheck, tini (`init`), graceful shutdown
 - Community files: code of conduct, security policy, support, governance, contributing
 - CI, Dependabot, CodeQL, stale and release automation

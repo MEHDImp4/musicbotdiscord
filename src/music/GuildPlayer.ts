@@ -16,6 +16,7 @@ import { AudioPipeline } from "../audio/AudioPipeline";
 import { env } from "../config/env";
 import type { AudioProvider } from "../providers/AudioProvider";
 import { logger } from "../utils/logger";
+import { DEFAULT_GUILD_SETTINGS, type GuildSettings } from "./GuildSettingsStore";
 import type { PlayerState } from "./PlayerState";
 import { QueueManager } from "./QueueManager";
 import type { Track } from "./Track";
@@ -81,8 +82,12 @@ export class GuildPlayer {
     provider: AudioProvider,
     private readonly onDestroyed: (guildId: string) => void,
     private readonly onNotify?: NotifyFn,
+    initialSettings: GuildSettings = DEFAULT_GUILD_SETTINGS,
+    private readonly onSettingsChange?: (patch: Partial<GuildSettings>) => void,
   ) {
     this.pipeline = new AudioPipeline(provider);
+    this._volume = initialSettings.volume;
+    this._loopMode = initialSettings.loopMode;
 
     this.audioPlayer.on(AudioPlayerStatus.Playing, () => {
       this._state = "PLAYING";
@@ -166,6 +171,7 @@ export class GuildPlayer {
     if (this.currentResource?.volume) {
       this.currentResource.volume.setVolume(this._volume / 100);
     }
+    this.onSettingsChange?.({ volume: this._volume });
   }
 
   get loopMode(): LoopMode {
@@ -174,6 +180,7 @@ export class GuildPlayer {
 
   set loopMode(mode: LoopMode) {
     this._loopMode = mode;
+    this.onSettingsChange?.({ loopMode: mode });
   }
 
   get skipVoteCount(): number {

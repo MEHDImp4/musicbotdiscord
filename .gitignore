@@ -10,3 +10,4 @@ coverage/
 .idea/
 yt-dlp.exe
 .planning/**/.cache/
+data/

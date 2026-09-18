@@ -103,6 +103,7 @@ Toutes les variables sont optionnelles sauf mention contraire.
 | `VOLUME_STEP` | `10` | Pas des boutons de volume |
 | `AUTOCOMPLETE_ENABLED` | `true` | Autocomplétion sur `/play` |
 | `YTDLP_PATH` / `FFMPEG_PATH` | `yt-dlp` / `ffmpeg` | Chemins des binaires |
+| `DATA_DIR` | `data` (`/data` en Docker) | Dossier de persistance des réglages par serveur (volume) |
 
 ## 🐳 Docker
 
