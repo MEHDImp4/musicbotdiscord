@@ -1,6 +1,6 @@
 {
   "name": "pulse",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Discord music bot MVP with YouTube, yt-dlp, FFmpeg and @discordjs/voice",
   "main": "dist/index.js",

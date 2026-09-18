@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-18
+
+First stable release of **Pulse** — a Discord music bot that streams YouTube audio with a per-server queue, button controls and reliable playback.
+
 ### Added
 
 - Autocomplete on `/play` and `/playnext` (fast suggestion endpoint)
@@ -37,5 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-guild queue, automatic next track, idle/empty-channel disconnect
 - YouTube search/URL playback via yt-dlp + FFmpeg
 
-[Unreleased]: https://github.com/MEHDImp4/pulse/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/MEHDImp4/pulse/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/MEHDImp4/pulse/releases/tag/v1.0.0
 [0.1.0]: https://github.com/MEHDImp4/pulse/releases/tag/v0.1.0
