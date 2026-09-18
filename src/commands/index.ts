@@ -111,6 +111,48 @@ const play: CommandDefinition = {
   },
 };
 
+const testaudio: CommandDefinition = {
+  data: new SlashCommandBuilder()
+    .setName("testaudio")
+    .setDescription("Joue un bip local de 3 secondes pour tester Discord Voice"),
+  async execute(interaction, { players }) {
+    if (!interaction.guildId || !interaction.guild) {
+      await interaction.reply({ content: "❌ Cette commande doit être utilisée dans un serveur.", ephemeral: true });
+      return;
+    }
+
+    const channel = await memberVoiceChannel(interaction);
+    if (!channel) {
+      await interaction.reply({ content: "❌ Rejoins d'abord un salon vocal.", ephemeral: true });
+      return;
+    }
+
+    const existing = players.get(interaction.guildId);
+    if (existing?.isConnected && existing.channelId !== channel.id) {
+      await interaction.reply({ content: "❌ Tu dois être dans le même salon vocal que le bot.", ephemeral: true });
+      return;
+    }
+
+    const permissions = channel.permissionsFor(interaction.guild.members.me!);
+    if (!permissions?.has(PermissionFlagsBits.Connect) || !permissions.has(PermissionFlagsBits.Speak)) {
+      await interaction.reply({ content: "❌ Je n'ai pas la permission de rejoindre ou parler dans ce salon.", ephemeral: true });
+      return;
+    }
+
+    await interaction.deferReply();
+
+    try {
+      const player = players.getOrCreate(interaction.guildId);
+      await player.connect(channel);
+      await player.playDiagnosticTone();
+      await interaction.editReply("🔊 Test audio lancé : tu dois entendre un bip de 440 Hz pendant 3 secondes.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      await interaction.editReply(`❌ Test audio impossible : ${message}`);
+    }
+  },
+};
+
 const pause: CommandDefinition = {
   data: new SlashCommandBuilder().setName("pause").setDescription("Met la lecture en pause"),
   async execute(interaction, { players }) {
@@ -201,6 +243,7 @@ const help: CommandDefinition = {
     await interaction.reply([
       "**Commandes disponibles**",
       "`/play query:<texte ou URL>` — jouer/ajouter un morceau",
+      "`/testaudio` — tester uniquement Discord Voice avec un bip local",
       "`/pause` — pause",
       "`/resume` — reprendre",
       "`/skip` — morceau suivant",
@@ -212,5 +255,5 @@ const help: CommandDefinition = {
   },
 };
 
-export const commands: CommandDefinition[] = [play, pause, resume, skip, stop, queue, nowplaying, leave, help];
+export const commands: CommandDefinition[] = [play, testaudio, pause, resume, skip, stop, queue, nowplaying, leave, help];
 export const commandMap = new Map(commands.map((command) => [command.data.name, command]));
