@@ -20,7 +20,10 @@
   1. `docker compose up` starts the bot without path-related errors (yt-dlp and FFmpeg found)
   2. Local `npm run dev` continues to work with the existing `.env` file unchanged
   3. `.env.docker` contains Linux-compatible paths (`yt-dlp`, `ffmpeg`) — no Windows paths
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Create .env.docker and update docker-compose.yml to use it
 
 ### Phase 2: Docker Build Hardening
 **Goal**: The container is production-ready with proper process management, health verification, and signal forwarding.
@@ -64,7 +67,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Environment Separation | 0/3 | Not started | - |
+| 1. Environment Separation | 0/1 | Not started | - |
 | 2. Docker Build Hardening | 0/3 | Not started | - |
 | 3. Graceful Shutdown | 0/3 | Not started | - |
 
