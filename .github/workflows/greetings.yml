@@ -17,12 +17,12 @@ jobs:
       - name: Greet first-time contributors
         uses: actions/first-interaction@v3
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-message: >-
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          issue_message: >-
             Merci pour ta première contribution ! 🎉 / Thanks for your first contribution! 🎉
             Un mainteneur va regarder ça rapidement. Pense à consulter le
             [Code de conduite](https://github.com/MEHDImp4/pulse/blob/master/CODE_OF_CONDUCT.md)
             et [CONTRIBUTING](https://github.com/MEHDImp4/pulse/blob/master/CONTRIBUTING.md).
-          pr-message: >-
+          pr_message: >-
             Merci pour ta première pull request ! 🎉 / Thanks for your first pull request! 🎉
             Vérifie que `npm run build` et `npm test` passent, puis un mainteneur la relira.
