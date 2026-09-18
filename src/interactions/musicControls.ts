@@ -1,4 +1,5 @@
 import {
+  MessageFlags,
   type ButtonInteraction,
   type GuildMember,
   type VoiceBasedChannel,
@@ -11,7 +12,7 @@ import { MUSIC_CONTROL_IDS } from "../ui/controls";
 const CONTROL_IDS = new Set<string>(Object.values(MUSIC_CONTROL_IDS));
 
 async function replyPrivate(interaction: ButtonInteraction, content: string): Promise<void> {
-  await interaction.reply({ content, ephemeral: true });
+  await interaction.reply({ content, flags: MessageFlags.Ephemeral });
 
   // Auto-delete transient confirmations, but keep errors readable.
   if (content.startsWith("❌")) return;

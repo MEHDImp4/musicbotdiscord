@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import { replyTemporary } from "../utils/reply";
 import { queueControlsRow } from "../ui/controls";
 import { queueEmbed, queuePageCount } from "../ui/embeds";
@@ -9,7 +9,7 @@ export const queue: CommandDefinition = {
   usage: "/queue",
   async execute(interaction, { players }) {
     if (!interaction.guildId) {
-      await interaction.reply({ content: "❌ Cette commande doit être utilisée dans un serveur.", ephemeral: true });
+      await interaction.reply({ content: "❌ Cette commande doit être utilisée dans un serveur.", flags: MessageFlags.Ephemeral });
       return;
     }
     const player = players.get(interaction.guildId);

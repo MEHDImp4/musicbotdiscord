@@ -1,4 +1,4 @@
-import type { ButtonInteraction } from "discord.js";
+import { MessageFlags, type ButtonInteraction } from "discord.js";
 import type { PlayerManager } from "../music/PlayerManager";
 import { QUEUE_PAGE_IDS, queueControlsRow } from "../ui/controls";
 import { queueEmbed, queuePageCount } from "../ui/embeds";
@@ -10,7 +10,7 @@ export async function handleQueuePagination(
   if (!interaction.customId.startsWith(QUEUE_PAGE_IDS.prefix)) return false;
 
   if (!interaction.guildId) {
-    await interaction.reply({ content: "❌ Ce bouton doit être utilisé dans un serveur.", ephemeral: true });
+    await interaction.reply({ content: "❌ Ce bouton doit être utilisé dans un serveur.", flags: MessageFlags.Ephemeral });
     return true;
   }
 

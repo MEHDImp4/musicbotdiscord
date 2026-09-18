@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import { playbackControlsRows } from "../ui/controls";
 import { trackEmbed } from "../ui/embeds";
 import { canJoinAndSpeak, memberVoiceChannel } from "./helpers";
@@ -19,24 +19,24 @@ export const play: CommandDefinition = {
   usage: "/play query:<texte ou URL>",
   async execute(interaction, { players }) {
     if (!interaction.guildId || !interaction.guild) {
-      await interaction.reply({ content: "❌ Cette commande doit être utilisée dans un serveur.", ephemeral: true });
+      await interaction.reply({ content: "❌ Cette commande doit être utilisée dans un serveur.", flags: MessageFlags.Ephemeral });
       return;
     }
 
     const channel = await memberVoiceChannel(interaction);
     if (!channel) {
-      await interaction.reply({ content: "❌ Tu dois être dans un salon vocal pour utiliser cette commande.", ephemeral: true });
+      await interaction.reply({ content: "❌ Tu dois être dans un salon vocal pour utiliser cette commande.", flags: MessageFlags.Ephemeral });
       return;
     }
 
     const existing = players.get(interaction.guildId);
     if (existing?.isConnected && existing.channelId !== channel.id) {
-      await interaction.reply({ content: "❌ Tu dois être dans le même salon vocal que le bot.", ephemeral: true });
+      await interaction.reply({ content: "❌ Tu dois être dans le même salon vocal que le bot.", flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (!canJoinAndSpeak(channel, interaction)) {
-      await interaction.reply({ content: "❌ Je n'ai pas la permission de rejoindre ou parler dans ce salon.", ephemeral: true });
+      await interaction.reply({ content: "❌ Je n'ai pas la permission de rejoindre ou parler dans ce salon.", flags: MessageFlags.Ephemeral });
       return;
     }
 

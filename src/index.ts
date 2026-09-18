@@ -1,5 +1,5 @@
 import { generateDependencyReport } from "@discordjs/voice";
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { commands, commandMap } from "./commands";
 import type { CommandContext } from "./commands/types";
 import { handleMusicControl } from "./interactions/musicControls";
@@ -47,9 +47,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       );
       const message = "❌ Impossible d'exécuter cette action.";
       if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({ content: message, ephemeral: true }).catch(() => undefined);
+        await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral }).catch(() => undefined);
       } else {
-        await interaction.reply({ content: message, ephemeral: true }).catch(() => undefined);
+        await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => undefined);
       }
     }
     return;
@@ -66,7 +66,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const remaining = checkCooldown(`${interaction.user.id}:${command.data.name}`, cooldownMs);
   if (remaining !== null) {
     await interaction
-      .reply({ content: `⏳ Patiente encore ${remaining} seconde(s) avant de réutiliser cette commande.`, ephemeral: true })
+      .reply({ content: `⏳ Patiente encore ${remaining} seconde(s) avant de réutiliser cette commande.`, flags: MessageFlags.Ephemeral })
       .catch(() => undefined);
     return;
   }
@@ -79,7 +79,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply(message).catch(() => undefined);
     } else {
-      await interaction.reply({ content: message, ephemeral: true }).catch(() => undefined);
+      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => undefined);
     }
   }
 });
