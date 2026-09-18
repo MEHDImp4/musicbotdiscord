@@ -1,9 +1,14 @@
+name: pulse
+
 services:
-  musicbot:
+  bot:
     build: .
-    container_name: musicbotdiscord
+    container_name: pulse
     restart: unless-stopped
     init: true
     stop_grace_period: 15s
     env_file:
       - .env.docker
+    volumes:
+      - .:/app
+      - /app/node_modules
