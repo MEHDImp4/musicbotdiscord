@@ -9,6 +9,15 @@ updates:
       prefix: "chore(deps)"
     labels:
       - dependencies
+    ignore:
+      # Keep @types/node aligned with the Node runtime major (currently 24).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 removes moduleResolution=node10: migrate deliberately.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # @discordjs/voice is pinned to a specific 1.0.0 dev snapshot; bump manually.
+      - dependency-name: "@discordjs/voice"
 
   - package-ecosystem: github-actions
     directory: "/"
