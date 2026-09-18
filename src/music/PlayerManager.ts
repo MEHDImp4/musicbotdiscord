@@ -51,4 +51,10 @@ export class PlayerManager {
   get size(): number {
     return this.players.size;
   }
+
+  get activeGuildIds(): string[] {
+    return [...this.players.entries()]
+      .filter(([, player]) => player.isConnected)
+      .map(([guildId]) => guildId);
+  }
 }

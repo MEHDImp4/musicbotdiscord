@@ -298,19 +298,13 @@ private killProcessesGracefully(): void {
 ## Open Questions
 
 1. **Which text channel should receive the disconnect message?**
-   - What we know: `player.channelId` is a voice channel ID. The bot needs a text channel to send to.
-   - What's unclear: The bot may not have a stored reference to the last text channel used in each guild.
-   - Recommendation: Send the message to the guild's system channel or the first available text channel the bot has permission to post in. Alternatively, store the last command channel per guild.
+   - RESOLVED: Track `lastTextChannelId` per GuildPlayer (set on each command interaction). Fallback to `guild.systemChannel` if no text channel has been used. The plan implements this via a new `lastTextChannelId` property on GuildPlayer.
 
 2. **Should the disconnect message be sent to the voice channel's associated text chat?**
-   - What we know: Discord voice channels have a linked text chat.
-   - What's unclear: Whether `channelId` from voice state maps to a sendable text channel.
-   - Recommendation: Use the guild's default channel or system channel as fallback.
+   - RESOLVED: No. Discord voice channel text chats are ephemeral and may not be accessible. Use `guild.systemChannel` as fallback instead. The plan's approach (lastTextChannelId + systemChannel fallback) is correct.
 
 3. **Should `process.once()` or `process.on()` be used for signal handlers?**
-   - What we know: `process.once()` prevents double-shutdown but means the second SIGTERM goes unhandled.
-   - What's unclear: Whether Docker sends multiple SIGTERM signals.
-   - Recommendation: Use `process.on()` with `shuttingDown` guard. The hard timeout handles the case where both signals are received.
+   - RESOLVED: Use `process.once()`. Docker sends a single SIGTERM, and the hard timeout (8s) forces exit if cleanup hangs. Using `process.on()` with an idempotency guard is redundant since `process.once()` already prevents double invocation. If a second SIGTERM arrives during hanging shutdown, the hard timeout handles it.
 
 ## Environment Availability
 

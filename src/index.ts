@@ -5,6 +5,7 @@ import { handleMusicControl } from "./interactions/musicControls";
 import { env } from "./config/env";
 import { PlayerManager } from "./music/PlayerManager";
 import { YouTubeProvider } from "./providers/YouTubeProvider";
+import { createShutdown } from "./shutdown";
 import { logger } from "./utils/logger";
 
 logger.info(
@@ -71,14 +72,9 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   else player.handleHumansPresent();
 });
 
-async function shutdown(signal: string): Promise<void> {
-  logger.info({ signal }, "Shutting down");
-  await players.destroyAll();
-  client.destroy();
-}
-
-process.once("SIGINT", () => void shutdown("SIGINT").finally(() => process.exit(0)));
-process.once("SIGTERM", () => void shutdown("SIGTERM").finally(() => process.exit(0)));
+const shutdown = createShutdown({ client, players, logger });
+process.once("SIGINT", () => void shutdown("SIGINT"));
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 client.login(env.discordToken).catch((error) => {
   logger.fatal({ err: error }, "Unable to login to Discord");

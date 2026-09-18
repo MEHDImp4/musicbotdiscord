@@ -39,6 +39,7 @@ export class GuildPlayer {
   private destroyed = false;
   private _currentTrack?: Track;
   private _state: PlayerState = "IDLE";
+  private _lastTextChannelId?: string;
 
   constructor(
     readonly guildId: string,
@@ -67,7 +68,7 @@ export class GuildPlayer {
       void this.runExclusive(async () => {
         if (this.destroyed) return;
         logger.info({ guild: this.guildId }, "Audio player entered IDLE");
-        this.killProcesses();
+        await this.killProcesses();
         this._currentTrack = undefined;
         await this.playNextInternal();
       });
@@ -105,6 +106,14 @@ export class GuildPlayer {
 
   get isConnected(): boolean {
     return Boolean(this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed);
+  }
+
+  get lastTextChannelId(): string | undefined {
+    return this._lastTextChannelId;
+  }
+
+  set lastTextChannelId(id: string | undefined) {
+    this._lastTextChannelId = id;
   }
 
   async connect(channel: VoiceBasedChannel): Promise<void> {
@@ -197,7 +206,7 @@ export class GuildPlayer {
       }
 
       this.clearIdleTimer();
-      this.killProcesses();
+      await this.killProcesses();
       this._state = "BUFFERING";
 
       const ffmpeg = spawn(
@@ -262,7 +271,7 @@ export class GuildPlayer {
   async skip(): Promise<boolean> {
     return this.runExclusive(async () => {
       if (!this._currentTrack) return false;
-      this.killProcesses();
+      await this.killProcesses();
       return this.audioPlayer.stop(true);
     });
   }
@@ -272,7 +281,7 @@ export class GuildPlayer {
       this._state = "STOPPING";
       this.queue.clear();
       this._currentTrack = undefined;
-      this.killProcesses();
+      await this.killProcesses();
       this.audioPlayer.stop(true);
       this._state = "IDLE";
       this.scheduleIdleDisconnect();
@@ -319,7 +328,7 @@ export class GuildPlayer {
     this.clearIdleTimer();
     this._state = "BUFFERING";
     this._currentTrack = track;
-    this.killProcesses();
+    await this.killProcesses();
 
     try {
       const { processes, resource } = await this.pipeline.create(track);
@@ -358,11 +367,55 @@ export class GuildPlayer {
     this.emptyChannelTimer = undefined;
   }
 
-  private killProcesses(): void {
-    for (const proc of this.childProcesses) {
-      if (!proc.killed) proc.kill("SIGKILL");
-    }
+  private async killProcesses(): Promise<void> {
+    const processes = this.childProcesses;
     this.childProcesses = [];
+
+    // Phase 1: Send SIGTERM to all processes
+    for (const proc of processes) {
+      if (!proc.killed) {
+        proc.kill("SIGTERM");
+      }
+    }
+
+    // Phase 2: Wait up to 1 second for graceful exit, then SIGKILL
+    const SIGTERM_GRACE_MS = 1_000;
+    await new Promise<void>((resolve) => {
+      let resolved = false;
+      const done = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      const killTimer = setTimeout(() => {
+        for (const proc of processes) {
+          if (!proc.killed) {
+            proc.kill("SIGKILL");
+            logger.warn({ pid: proc.pid }, "Force-killed process with SIGKILL after timeout");
+          }
+        }
+        done();
+      }, SIGTERM_GRACE_MS);
+
+      // If all processes exit before timeout, clear the timer
+      const checkAllExited = () => {
+        if (processes.every((p) => p.exitCode !== null || p.killed)) {
+          clearTimeout(killTimer);
+          done();
+        }
+      };
+
+      for (const proc of processes) {
+        proc.on("exit", checkAllExited);
+      }
+
+      // Also check immediately in case processes are already dead
+      checkAllExited();
+    });
+
+    logger.debug({ count: processes.length }, "All child processes terminated");
   }
 
   private async destroyInternal(): Promise<void> {
@@ -372,7 +425,8 @@ export class GuildPlayer {
     this.clearEmptyChannelTimer();
     this.queue.clear();
     this._currentTrack = undefined;
-    this.killProcesses();
+    this._lastTextChannelId = undefined;
+    await this.killProcesses();
     this.audioPlayer.stop(true);
     if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
       this.connection.destroy();
