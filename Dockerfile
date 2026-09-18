@@ -2,7 +2,7 @@ FROM node:24-bookworm-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg python3 python3-pip build-essential ca-certificates \
-    && pip3 install --no-cache-dir --break-system-packages --upgrade yt-dlp \
+    && pip3 install --no-cache-dir --break-system-packages --upgrade --pre "yt-dlp[default]" \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
