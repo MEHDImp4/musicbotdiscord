@@ -7,6 +7,7 @@ import {
 } from "discord.js";
 import type { PlayerManager } from "../music/PlayerManager";
 import { queueEmbed, trackEmbed } from "../ui/embeds";
+import { musicControlsRow } from "../ui/controls";
 
 export interface CommandContext {
   players: PlayerManager;
@@ -97,7 +98,10 @@ const play: CommandDefinition = {
       const result = await player.add(track);
 
       if (result.started) {
-        await interaction.editReply({ embeds: [trackEmbed("🎵 Lecture en cours", track)] });
+        await interaction.editReply({
+          embeds: [trackEmbed("🎵 Lecture en cours", track)],
+          components: [musicControlsRow()],
+        });
       } else {
         await interaction.editReply({
           content: `✅ Ajouté à la file d'attente — position #${result.position}`,
@@ -223,7 +227,7 @@ const nowplaying: CommandDefinition = {
       return;
     }
     const embed = trackEmbed("🎵 Now Playing", track).addFields({ name: "État", value: player.state, inline: true });
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [embed], components: [musicControlsRow()] });
   },
 };
 

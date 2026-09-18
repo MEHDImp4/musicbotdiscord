@@ -1,6 +1,7 @@
 import { generateDependencyReport } from "@discordjs/voice";
 import { Client, Events, GatewayIntentBits } from "discord.js";
 import { commandMap } from "./commands";
+import { handleMusicControl } from "./interactions/musicControls";
 import { env } from "./config/env";
 import { PlayerManager } from "./music/PlayerManager";
 import { YouTubeProvider } from "./providers/YouTubeProvider";
@@ -22,6 +23,24 @@ client.once(Events.ClientReady, (readyClient) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton()) {
+    try {
+      const handled = await handleMusicControl(interaction, players);
+      if (handled) return;
+    } catch (error) {
+      logger.error(
+        { err: error, customId: interaction.customId, guild: interaction.guildId },
+        "Music control button failed",
+      );
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({ content: "❌ Impossible d'exécuter cette action.", ephemeral: true }).catch(() => undefined);
+      } else {
+        await interaction.reply({ content: "❌ Impossible d'exécuter cette action.", ephemeral: true }).catch(() => undefined);
+      }
+      return;
+    }
+  }
+
   if (!interaction.isChatInputCommand()) return;
   const command = commandMap.get(interaction.commandName);
   if (!command) return;
