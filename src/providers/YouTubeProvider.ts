@@ -1,6 +1,9 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import type { Readable } from "node:stream";
 import { env } from "../config/env";
-import type { RequestedBy, Track } from "../music/Track";
+import { logger } from "../utils/logger";
 import { runProcess } from "../utils/process";
+import type { RequestedBy, Track } from "../music/Track";
 import type { AudioProvider } from "./AudioProvider";
 
 interface YtDlpInfo {
@@ -62,25 +65,22 @@ export class YouTubeProvider implements AudioProvider {
     return toTrack(info, requestedBy);
   }
 
-  async getStreamUrl(track: Track): Promise<string> {
-    let lastError: unknown;
+  async createReadStream(track: Track): Promise<{ stream: Readable; process: ChildProcess }> {
+    const ytdlp = spawn(
+      env.ytdlpPath,
+      ["--no-playlist", "--no-warnings", "-f", "bestaudio/best", "-o", "-", track.webpageUrl],
+      { stdio: ["ignore", "pipe", "pipe"], shell: false, windowsHide: true },
+    );
 
-    for (let attempt = 0; attempt <= env.maxStreamRetries; attempt += 1) {
-      try {
-        const { stdout } = await runProcess(
-          env.ytdlpPath,
-          ["--no-playlist", "--no-warnings", "-f", "bestaudio/best", "-g", track.webpageUrl],
-          { timeoutMs: env.externalProcessTimeoutMs, maxOutputBytes: 200_000 },
-        );
-        const streamUrl = stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
-        if (!streamUrl) throw new Error("yt-dlp did not return a playable stream URL");
-        return streamUrl;
-      } catch (error) {
-        lastError = error;
-      }
-    }
+    ytdlp.stderr.on("data", (chunk: Buffer) => {
+      logger.debug({ track: track.title, ytdlp: chunk.toString("utf8").trim() }, "yt-dlp stderr");
+    });
 
-    throw lastError instanceof Error ? lastError : new Error("Unable to resolve audio stream");
+    ytdlp.on("error", (error) => {
+      logger.error({ err: error, track: track.title }, "yt-dlp process error");
+    });
+
+    return { stream: ytdlp.stdout, process: ytdlp };
   }
 
   private async fetchInfo(target: string): Promise<YtDlpInfo> {

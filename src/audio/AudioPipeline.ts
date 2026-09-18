@@ -6,7 +6,7 @@ import type { AudioProvider } from "../providers/AudioProvider";
 import { logger } from "../utils/logger";
 
 export interface AudioPipelineResult {
-  process: ChildProcess;
+  processes: ChildProcess[];
   resource: AudioResource<Track>;
 }
 
@@ -14,7 +14,7 @@ export class AudioPipeline {
   constructor(private readonly provider: AudioProvider) {}
 
   async create(track: Track): Promise<AudioPipelineResult> {
-    const streamUrl = await this.provider.getStreamUrl(track);
+    const { stream: audioStream, process: ytdlpProcess } = await this.provider.createReadStream(track);
 
     const ffmpeg = spawn(
       env.ffmpegPath,
@@ -24,7 +24,7 @@ export class AudioPipeline {
         "warning",
         "-nostdin",
         "-i",
-        streamUrl,
+        "pipe:0",
         "-vn",
         "-f",
         "s16le",
@@ -35,11 +35,19 @@ export class AudioPipeline {
         "pipe:1",
       ],
       {
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
         shell: false,
         windowsHide: true,
       },
     );
+
+    audioStream.pipe(ffmpeg.stdin);
+
+    audioStream.on("error", (error) => {
+      logger.error({ err: error, track: track.title }, "yt-dlp stream error");
+    });
+
+    ffmpeg.stdin.on("error", () => {});
 
     ffmpeg.stderr.on("data", (chunk: Buffer) => {
       logger.debug({ track: track.title, ffmpeg: chunk.toString("utf8").trim() }, "ffmpeg");
@@ -54,6 +62,6 @@ export class AudioPipeline {
       metadata: track,
     });
 
-    return { process: ffmpeg, resource };
+    return { processes: [ytdlpProcess, ffmpeg], resource };
   }
 }

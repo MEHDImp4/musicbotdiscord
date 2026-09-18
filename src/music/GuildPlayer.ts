@@ -30,7 +30,7 @@ export class GuildPlayer {
 
   private readonly pipeline: AudioPipeline;
   private connection?: VoiceConnection;
-  private ffmpeg?: ChildProcess;
+  private childProcesses: ChildProcess[] = [];
   private idleTimer?: NodeJS.Timeout;
   private emptyChannelTimer?: NodeJS.Timeout;
   private serial: Promise<unknown> = Promise.resolve();
@@ -59,7 +59,7 @@ export class GuildPlayer {
     this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
       void this.runExclusive(async () => {
         if (this.destroyed) return;
-        this.killFfmpeg();
+        this.killProcesses();
         this._currentTrack = undefined;
         await this.playNextInternal();
       });
@@ -154,7 +154,7 @@ export class GuildPlayer {
   async skip(): Promise<boolean> {
     return this.runExclusive(async () => {
       if (!this._currentTrack) return false;
-      this.killFfmpeg();
+      this.killProcesses();
       return this.audioPlayer.stop(true);
     });
   }
@@ -164,7 +164,7 @@ export class GuildPlayer {
       this._state = "STOPPING";
       this.queue.clear();
       this._currentTrack = undefined;
-      this.killFfmpeg();
+      this.killProcesses();
       this.audioPlayer.stop(true);
       this._state = "IDLE";
       this.scheduleIdleDisconnect();
@@ -211,11 +211,11 @@ export class GuildPlayer {
     this.clearIdleTimer();
     this._state = "BUFFERING";
     this._currentTrack = track;
-    this.killFfmpeg();
+    this.killProcesses();
 
     try {
-      const { process, resource } = await this.pipeline.create(track);
-      this.ffmpeg = process;
+      const { processes, resource } = await this.pipeline.create(track);
+      this.childProcesses = processes;
       this.audioPlayer.play(resource);
     } catch (error) {
       this._currentTrack = undefined;
@@ -242,9 +242,11 @@ export class GuildPlayer {
     this.emptyChannelTimer = undefined;
   }
 
-  private killFfmpeg(): void {
-    if (this.ffmpeg && !this.ffmpeg.killed) this.ffmpeg.kill("SIGKILL");
-    this.ffmpeg = undefined;
+  private killProcesses(): void {
+    for (const proc of this.childProcesses) {
+      if (!proc.killed) proc.kill("SIGKILL");
+    }
+    this.childProcesses = [];
   }
 
   private async destroyInternal(): Promise<void> {
@@ -254,7 +256,7 @@ export class GuildPlayer {
     this.clearEmptyChannelTimer();
     this.queue.clear();
     this._currentTrack = undefined;
-    this.killFfmpeg();
+    this.killProcesses();
     this.audioPlayer.stop(true);
     if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
       this.connection.destroy();
