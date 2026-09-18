@@ -13,6 +13,7 @@ import {
 } from "@discordjs/voice";
 import type { Message, VoiceBasedChannel } from "discord.js";
 import { AudioPipeline } from "../audio/AudioPipeline";
+import { percentToGain } from "../audio/volume";
 import { env } from "../config/env";
 import type { AudioProvider } from "../providers/AudioProvider";
 import { logger } from "../utils/logger";
@@ -169,7 +170,7 @@ export class GuildPlayer {
   set volume(value: number) {
     this._volume = Math.max(0, Math.min(100, Math.round(value)));
     if (this.currentResource?.volume) {
-      this.currentResource.volume.setVolume(this._volume / 100);
+      this.currentResource.volume.setVolume(percentToGain(this._volume, env.volumeHeadroomDb, env.volumeRangeDb));
     }
     this.onSettingsChange?.({ volume: this._volume });
   }
@@ -371,7 +372,7 @@ export class GuildPlayer {
         inputType: StreamType.Raw,
         inlineVolume: true,
       });
-      if (resource.volume) resource.volume.setVolume(this._volume / 100);
+      if (resource.volume) resource.volume.setVolume(percentToGain(this._volume, env.volumeHeadroomDb, env.volumeRangeDb));
       this.currentResource = resource;
 
       this.audioPlayer.play(resource);

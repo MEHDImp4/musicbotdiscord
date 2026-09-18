@@ -52,7 +52,9 @@ export const env = {
   nowPlayingLive: boolEnv("NOWPLAYING_LIVE", true),
   voteSkipMin: intEnv("VOTE_SKIP_MIN", 2),
   voteSkipRatio: floatEnv("VOTE_SKIP_RATIO", 0.5),
-  volumeStep: intEnv("VOLUME_STEP", 10),
+  volumeStep: intEnv("VOLUME_STEP", 5),
+  volumeHeadroomDb: floatEnv("VOLUME_HEADROOM_DB", 3),
+  volumeRangeDb: floatEnv("VOLUME_RANGE_DB", 30),
   autocompleteEnabled: boolEnv("AUTOCOMPLETE_ENABLED", true),
   suggestTimeoutMs: intEnv("SUGGEST_TIMEOUT_MS", 800),
 } as const;

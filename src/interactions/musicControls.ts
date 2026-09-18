@@ -7,6 +7,7 @@ import {
 import { env } from "../config/env";
 import type { PlayerManager } from "../music/PlayerManager";
 import { computeSkipThreshold } from "../music/voteSkip";
+import { refreshNowPlaying } from "../services/nowPlaying";
 import { MUSIC_CONTROL_IDS } from "../ui/controls";
 
 const CONTROL_IDS = new Set<string>(Object.values(MUSIC_CONTROL_IDS));
@@ -98,6 +99,7 @@ export async function handleMusicControl(
     case MUSIC_CONTROL_IDS.volumeUp: {
       const delta = interaction.customId === MUSIC_CONTROL_IDS.volumeUp ? env.volumeStep : -env.volumeStep;
       player.volume = player.volume + delta;
+      await refreshNowPlaying(player);
       await replyPrivate(interaction, `🔊 Volume : **${player.volume}%**`);
       return true;
     }

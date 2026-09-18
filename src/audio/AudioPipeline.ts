@@ -4,6 +4,7 @@ import { env } from "../config/env";
 import type { Track } from "../music/Track";
 import type { AudioProvider } from "../providers/AudioProvider";
 import { logger } from "../utils/logger";
+import { percentToGain } from "./volume";
 
 export interface AudioPipelineResult {
   processes: ChildProcess[];
@@ -85,7 +86,7 @@ export class AudioPipeline {
       inlineVolume: true,
     });
     if (resource.volume) {
-      resource.volume.setVolume(volume / 100);
+      resource.volume.setVolume(percentToGain(volume, env.volumeHeadroomDb, env.volumeRangeDb));
     }
 
     return { processes: [ytdlpProcess, ffmpeg], resource };

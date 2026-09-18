@@ -25,7 +25,7 @@
 - ⏯️ **Button controls**: pause, resume, skip, stop, vote-skip, volume
 - 📊 **Live progress** in `/nowplaying` (bar + elapsed/total time)
 - 🗳️ **Vote-skip** by majority (min. 2 votes) for group listening
-- 🔊 **Live volume** control (0–100)
+- 🔊 **Live volume** control (0–100), shown on the now-playing card
 - 🚀 **Reliability**: automatic stream retry, **SponsorBlock**, `yt-dlp` cookies, `yt-dlp` self-update on start
 - 🛡️ **Anti-spam**: per-user, per-command cooldowns
 - 🐳 **Production-ready Docker**: healthcheck, tini (PID 1), graceful shutdown
@@ -102,7 +102,8 @@ All variables are optional unless stated otherwise.
 | `YTDLP_AUTO_UPDATE` | `true` | Update `yt-dlp` on container start |
 | `NOWPLAYING_LIVE` | `true` | Refresh the progress bar |
 | `VOTE_SKIP_MIN` / `VOTE_SKIP_RATIO` | `2` / `0.5` | Vote-skip threshold |
-| `VOLUME_STEP` | `10` | Volume button step |
+| `VOLUME_STEP` | `5` | Volume button step |
+| `VOLUME_HEADROOM_DB` / `VOLUME_RANGE_DB` | `3` / `30` | Perceptual volume curve (dB) |
 | `AUTOCOMPLETE_ENABLED` | `true` | Autocomplete on `/play` |
 | `YTDLP_PATH` / `FFMPEG_PATH` | `yt-dlp` / `ffmpeg` | Binary paths |
 | `DATA_DIR` | `data` (`/data` in Docker) | Persistence directory for per-guild settings (volume) |

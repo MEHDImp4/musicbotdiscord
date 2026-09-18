@@ -25,7 +25,7 @@
 - ⏯️ **Contrôles par boutons** : pause, reprise, suivant, stop, vote-skip, volume ±
 - 📊 **Progression en direct** dans `/nowplaying` (barre + temps écoulé/total)
 - 🗳️ **Vote-skip** majoritaire (min. 2 voix) pour les écoutes en groupe
-- 🔊 **Volume réglable** en direct (0–100)
+- 🔊 **Volume réglable** en direct (0–100), affiché dans la fiche de lecture
 - 🚀 **Fiabilité** : retry automatique des flux, **SponsorBlock**, cookies `yt-dlp`, mise à jour `yt-dlp` au démarrage
 - 🛡️ **Anti-spam** : cooldowns par utilisateur et par commande
 - 🐳 **Docker prêt pour la prod** : healthcheck, tini (PID 1), arrêt gracieux
@@ -100,7 +100,8 @@ Toutes les variables sont optionnelles sauf mention contraire.
 | `YTDLP_AUTO_UPDATE` | `true` | Met à jour `yt-dlp` au démarrage du conteneur |
 | `NOWPLAYING_LIVE` | `true` | Rafraîchit la barre de progression |
 | `VOTE_SKIP_MIN` / `VOTE_SKIP_RATIO` | `2` / `0.5` | Seuil du vote-skip |
-| `VOLUME_STEP` | `10` | Pas des boutons de volume |
+| `VOLUME_STEP` | `5` | Pas des boutons de volume |
+| `VOLUME_HEADROOM_DB` / `VOLUME_RANGE_DB` | `3` / `30` | Courbe de volume perceptuelle (dB) |
 | `AUTOCOMPLETE_ENABLED` | `true` | Autocomplétion sur `/play` |
 | `YTDLP_PATH` / `FFMPEG_PATH` | `yt-dlp` / `ffmpeg` | Chemins des binaires |
 | `DATA_DIR` | `data` (`/data` en Docker) | Dossier de persistance des réglages par serveur (volume) |

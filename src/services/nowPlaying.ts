@@ -1,7 +1,19 @@
+import type { GuildPlayer } from "../music/GuildPlayer";
 import type { PlayerManager } from "../music/PlayerManager";
 import { playbackControlsRows } from "../ui/controls";
 import { nowPlayingEmbed } from "../ui/embeds";
 import { logger } from "../utils/logger";
+
+/** Immediately re-renders the live now-playing panel (e.g. after a volume change). */
+export async function refreshNowPlaying(player: GuildPlayer): Promise<void> {
+  const message = player.nowPlayingMessage;
+  if (!message || !player.currentTrack) return;
+  await message
+    .edit({ embeds: [nowPlayingEmbed(player)], components: playbackControlsRows() })
+    .catch((error) => {
+      logger.debug({ err: error, guild: player.guildId }, "Immediate now playing update failed");
+    });
+}
 
 /**
  * Periodically refreshes the progress bar of the live /nowplaying message.

@@ -56,7 +56,7 @@ export const play: CommandDefinition = {
 
       if (result.started) {
         await interaction.editReply({
-          embeds: [trackEmbed("🎵 Lecture en cours", track)],
+          embeds: [trackEmbed("🎵 Lecture en cours", track, player.volume)],
           components: playbackControlsRows(),
         });
       } else {

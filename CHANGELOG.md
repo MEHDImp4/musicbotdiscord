@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/loop` (off / track / queue), `/shuffle`, `/playnext`, `/remove`, `/clear`
 - Vote-skip with a majority threshold (`/voteskip` + button)
 - Volume controls (command + +/- buttons) and live now-playing progress bar
+- Perceptual (dB) volume curve so the 0-100 scale feels even; volume shown on the player card
 - Paginated `/queue` with buttons
 - Per-user command cooldowns
 - Stream retry with channel notification, SponsorBlock, optional yt-dlp cookies

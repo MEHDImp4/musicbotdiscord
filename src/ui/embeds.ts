@@ -1,4 +1,5 @@
 import { EmbedBuilder } from "discord.js";
+import { formatVolume } from "../audio/volume";
 import type { GuildPlayer } from "../music/GuildPlayer";
 import type { Track } from "../music/Track";
 import { formatDuration } from "../utils/time";
@@ -6,14 +7,20 @@ import { renderProgressBar } from "./progress";
 
 export const QUEUE_PAGE_SIZE = 10;
 
-export function trackEmbed(title: string, track: Track): EmbedBuilder {
+export function trackEmbed(title: string, track: Track, volumePercent?: number): EmbedBuilder {
+  const fields = [
+    { name: "Durée", value: formatDuration(track.duration), inline: true },
+    { name: "Demandé par", value: track.requestedBy.username, inline: true },
+  ];
+
+  if (volumePercent !== undefined) {
+    fields.push({ name: "Volume", value: formatVolume(volumePercent), inline: true });
+  }
+
   const embed = new EmbedBuilder()
     .setTitle(title)
     .setDescription(`**${track.title}**${track.author ? `\n${track.author}` : ""}`)
-    .addFields(
-      { name: "Durée", value: formatDuration(track.duration), inline: true },
-      { name: "Demandé par", value: track.requestedBy.username, inline: true },
-    )
+    .addFields(...fields)
     .setURL(track.webpageUrl);
 
   if (track.thumbnail) embed.setThumbnail(track.thumbnail);
@@ -35,6 +42,7 @@ export function nowPlayingEmbed(player: GuildPlayer): EmbedBuilder {
     .addFields(
       { name: "Progression", value: renderProgressBar(elapsed, track.duration) },
       { name: "État", value: player.state, inline: true },
+      { name: "Volume", value: formatVolume(player.volume), inline: true },
       { name: "Demandé par", value: track.requestedBy.username, inline: true },
     )
     .setURL(track.webpageUrl);
