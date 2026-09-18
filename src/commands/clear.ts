@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
@@ -11,6 +12,9 @@ export const clear: CommandDefinition = {
 
     const count = context.player.queue.size;
     context.player.queue.clear();
-    await interaction.reply(count > 0 ? `🗑️ File vidée (${count} morceaux retirés).` : "ℹ️ La file était déjà vide.");
+    await replyTemporary(
+      interaction,
+      count > 0 ? `🗑️ File vidée (${count} morceaux retirés).` : "ℹ️ La file était déjà vide.",
+    );
   },
 };

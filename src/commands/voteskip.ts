@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import { computeSkipThreshold } from "../music/voteSkip";
 import { env } from "../config/env";
+import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
@@ -17,10 +18,10 @@ export const voteskip: CommandDefinition = {
     const result = await context.player.voteSkip(interaction.user.id, threshold);
 
     if (result.skipped) {
-      await interaction.reply("⏭ Assez de votes — morceau ignoré.");
+      await replyTemporary(interaction, "⏭ Assez de votes — morceau ignoré.");
       return;
     }
 
-    await interaction.reply(`🗳️ Vote enregistré (${result.votes}/${threshold}).`);
+    await replyTemporary(interaction, `🗳️ Vote enregistré (${result.votes}/${threshold}).`);
   },
 };

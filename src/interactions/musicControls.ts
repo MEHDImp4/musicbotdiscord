@@ -12,6 +12,13 @@ const CONTROL_IDS = new Set<string>(Object.values(MUSIC_CONTROL_IDS));
 
 async function replyPrivate(interaction: ButtonInteraction, content: string): Promise<void> {
   await interaction.reply({ content, ephemeral: true });
+
+  // Auto-delete transient confirmations, but keep errors readable.
+  if (content.startsWith("❌")) return;
+  if (env.autoDeleteSeconds <= 0) return;
+  setTimeout(() => {
+    void interaction.deleteReply().catch(() => undefined);
+  }, env.autoDeleteSeconds * 1000);
 }
 
 function botVoiceChannel(interaction: ButtonInteraction, channelId: string | undefined): VoiceBasedChannel | null {

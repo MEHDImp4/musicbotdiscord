@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
@@ -22,16 +23,16 @@ export const remove: CommandDefinition = {
     const size = context.player.queue.size;
 
     if (size === 0) {
-      await interaction.reply("ℹ️ La file d'attente est vide.");
+      await replyTemporary(interaction, "ℹ️ La file d'attente est vide.");
       return;
     }
 
     const removed = context.player.queue.removeAt(position - 1);
     if (!removed) {
-      await interaction.reply(`❌ Position invalide (1 à ${size}).`);
+      await replyTemporary(interaction, `❌ Position invalide (1 à ${size}).`);
       return;
     }
 
-    await interaction.reply(`🗑️ **${removed.title}** retiré de la file.`);
+    await replyTemporary(interaction, `🗑️ **${removed.title}** retiré de la file.`);
   },
 };

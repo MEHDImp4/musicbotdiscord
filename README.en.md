@@ -96,6 +96,7 @@ All variables are optional unless stated otherwise.
 | `IDLE_TIMEOUT_SECONDS` | `300` | Auto-disconnect after inactivity |
 | `EMPTY_CHANNEL_TIMEOUT_SECONDS` | `60` | Auto-disconnect when the channel is empty |
 | `COMMAND_COOLDOWN_SECONDS` | `5` | Default anti-spam cooldown |
+| `AUTO_DELETE_SECONDS` | `1` | Auto-delete confirmation replies (0 = disabled; messages with buttons are kept) |
 | `SPONSORBLOCK_CATEGORIES` | `sponsor,selfpromo` | Segments skipped via SponsorBlock |
 | `YTDLP_COOKIES_FILE` | — | `yt-dlp` cookies (restricted / anti-bot videos) |
 | `YTDLP_AUTO_UPDATE` | `true` | Update `yt-dlp` on container start |

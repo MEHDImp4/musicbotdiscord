@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
@@ -9,6 +10,6 @@ export const leave: CommandDefinition = {
     const context = await requireControlChannel(interaction, players);
     if (!context || !interaction.guildId) return;
     await players.destroy(interaction.guildId);
-    await interaction.reply("👋 Déconnecté du salon vocal.");
+    await replyTemporary(interaction, "👋 Déconnecté du salon vocal.");
   },
 };

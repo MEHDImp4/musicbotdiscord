@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
@@ -9,6 +10,6 @@ export const skip: CommandDefinition = {
     const context = await requireControlChannel(interaction, players);
     if (!context) return;
     const skipped = await context.player.skip();
-    await interaction.reply(skipped ? "⏭ Morceau ignoré." : "ℹ️ Aucun morceau à ignorer.");
+    await replyTemporary(interaction, skipped ? "⏭ Morceau ignoré." : "ℹ️ Aucun morceau à ignorer.");
   },
 };

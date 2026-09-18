@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
@@ -21,11 +22,11 @@ export const volume: CommandDefinition = {
 
     const level = interaction.options.getInteger("level");
     if (level === null) {
-      await interaction.reply(`🔊 Volume actuel : **${context.player.volume}%**`);
+      await replyTemporary(interaction, `🔊 Volume actuel : **${context.player.volume}%**`);
       return;
     }
 
     context.player.volume = level;
-    await interaction.reply(`🔊 Volume réglé sur **${context.player.volume}%**`);
+    await replyTemporary(interaction, `🔊 Volume réglé sur **${context.player.volume}%**`);
   },
 };

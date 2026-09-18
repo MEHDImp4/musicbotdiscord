@@ -94,6 +94,7 @@ Toutes les variables sont optionnelles sauf mention contraire.
 | `IDLE_TIMEOUT_SECONDS` | `300` | Déconnexion auto après inactivité |
 | `EMPTY_CHANNEL_TIMEOUT_SECONDS` | `60` | Déconnexion auto quand le salon est vide |
 | `COMMAND_COOLDOWN_SECONDS` | `5` | Cooldown anti-spam par défaut |
+| `AUTO_DELETE_SECONDS` | `1` | Suppression auto des messages de confirmation (0 = désactivé ; les messages à boutons sont conservés) |
 | `SPONSORBLOCK_CATEGORIES` | `sponsor,selfpromo` | Passages ignorés par SponsorBlock |
 | `YTDLP_COOKIES_FILE` | — | Cookies `yt-dlp` (vidéos restreintes / anti-bot) |
 | `YTDLP_AUTO_UPDATE` | `true` | Met à jour `yt-dlp` au démarrage du conteneur |

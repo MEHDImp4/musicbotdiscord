@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
@@ -9,6 +10,6 @@ export const stop: CommandDefinition = {
     const context = await requireControlChannel(interaction, players);
     if (!context) return;
     await context.player.stop();
-    await interaction.reply("⏹ Lecture arrêtée et file d'attente vidée.");
+    await replyTemporary(interaction, "⏹ Lecture arrêtée et file d'attente vidée.");
   },
 };

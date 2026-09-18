@@ -47,6 +47,7 @@ export const env = {
   externalProcessTimeoutMs: intEnv("EXTERNAL_PROCESS_TIMEOUT_MS", 20_000),
   voiceConnectionTimeoutMs: intEnv("VOICE_CONNECTION_TIMEOUT_MS", 20_000),
   commandCooldownSeconds: intEnv("COMMAND_COOLDOWN_SECONDS", 5),
+  autoDeleteSeconds: intEnv("AUTO_DELETE_SECONDS", 1),
   nowPlayingLive: boolEnv("NOWPLAYING_LIVE", true),
   voteSkipMin: intEnv("VOTE_SKIP_MIN", 2),
   voteSkipRatio: floatEnv("VOTE_SKIP_RATIO", 0.5),

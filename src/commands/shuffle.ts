@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
@@ -11,11 +12,11 @@ export const shuffle: CommandDefinition = {
 
     const count = context.player.queue.size;
     if (count < 2) {
-      await interaction.reply("ℹ️ Pas assez de morceaux pour mélanger.");
+      await replyTemporary(interaction, "ℹ️ Pas assez de morceaux pour mélanger.");
       return;
     }
 
     context.player.queue.shuffle();
-    await interaction.reply(`🔀 File mélangée (${count} morceaux).`);
+    await replyTemporary(interaction, `🔀 File mélangée (${count} morceaux).`);
   },
 };

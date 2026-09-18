@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { queueControlsRow } from "../ui/controls";
 import { queueEmbed, queuePageCount } from "../ui/embeds";
 import type { CommandDefinition } from "./types";
@@ -13,7 +14,7 @@ export const queue: CommandDefinition = {
     }
     const player = players.get(interaction.guildId);
     if (!player) {
-      await interaction.reply("🎶 La file d'attente est vide.");
+      await replyTemporary(interaction, "🎶 La file d'attente est vide.");
       return;
     }
     const totalPages = queuePageCount(player);

@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { replyTemporary } from "../utils/reply";
 import { playbackControlsRows } from "../ui/controls";
 import { nowPlayingEmbed } from "../ui/embeds";
 import type { CommandDefinition } from "./types";
@@ -15,7 +16,7 @@ export const nowplaying: CommandDefinition = {
     const player = players.get(interaction.guildId);
     const track = player?.currentTrack;
     if (!player || !track) {
-      await interaction.reply("ℹ️ Aucun morceau n'est actuellement joué.");
+      await replyTemporary(interaction, "ℹ️ Aucun morceau n'est actuellement joué.");
       return;
     }
 
