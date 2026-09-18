@@ -40,7 +40,10 @@ Plans:
   2. Container uses `init: true` — no zombie processes accumulate during runtime
   3. `docker compose stop` allows up to 15 seconds for the bot to shut down gracefully
 
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02-01-PLAN.md — Add HEALTHCHECK, init: true, and stop_grace_period
 
 ### Phase 3: Graceful Shutdown
 
@@ -78,7 +81,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Environment Separation | 1/1 | Complete   | 2026-09-18 |
-| 2. Docker Build Hardening | 0/3 | Not started | - |
+| 2. Docker Build Hardening | 0/1 | Not started | - |
 | 3. Graceful Shutdown | 0/3 | Not started | - |
 
 ---
