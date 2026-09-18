@@ -4,4 +4,4 @@ services:
     container_name: musicbotdiscord
     restart: unless-stopped
     env_file:
-      - .env
+      - .env.docker
