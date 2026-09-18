@@ -1,9 +1,11 @@
-import type { ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
+  StreamType,
   VoiceConnectionStatus,
   createAudioPlayer,
+  createAudioResource,
   entersState,
   joinVoiceChannel,
   type VoiceConnection,
@@ -47,9 +49,14 @@ export class GuildPlayer {
 
     this.audioPlayer.on(AudioPlayerStatus.Playing, () => {
       this._state = "PLAYING";
-      if (this._currentTrack) {
-        logger.info({ guild: this.guildId, track: this._currentTrack.title }, "Playback started");
-      }
+      logger.info(
+        {
+          guild: this.guildId,
+          track: this._currentTrack?.title ?? "diagnostic-tone",
+          playableConnections: this.audioPlayer.playable.length,
+        },
+        "Audio player entered PLAYING",
+      );
     });
 
     this.audioPlayer.on(AudioPlayerStatus.Paused, () => {
@@ -59,6 +66,7 @@ export class GuildPlayer {
     this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
       void this.runExclusive(async () => {
         if (this.destroyed) return;
+        logger.info({ guild: this.guildId }, "Audio player entered IDLE");
         this.killProcesses();
         this._currentTrack = undefined;
         await this.playNextInternal();
@@ -72,6 +80,10 @@ export class GuildPlayer {
       );
       this._state = "ERROR";
       this.audioPlayer.stop(true);
+    });
+
+    this.audioPlayer.on("debug", (message) => {
+      logger.debug({ guild: this.guildId, message }, "Audio player debug");
     });
   }
 
@@ -114,12 +126,43 @@ export class GuildPlayer {
         selfDeaf: true,
       });
 
-      this.connection.subscribe(this.audioPlayer);
+      this.connection.on("error", (error) => {
+        logger.error({ err: error, guild: this.guildId }, "Voice connection error");
+      });
+
+      this.connection.on("debug", (message) => {
+        logger.debug({ guild: this.guildId, message }, "Voice connection debug");
+      });
+
+      this.connection.on("stateChange", (oldState, newState) => {
+        logger.info(
+          {
+            guild: this.guildId,
+            from: oldState.status,
+            to: newState.status,
+          },
+          "Voice connection state changed",
+        );
+      });
+
+      const subscription = this.connection.subscribe(this.audioPlayer);
+      if (!subscription) {
+        throw new Error("Unable to subscribe the audio player to the voice connection");
+      }
 
       try {
         await entersState(this.connection, VoiceConnectionStatus.Ready, env.voiceConnectionTimeoutMs);
         this._state = this._currentTrack ? "PLAYING" : "IDLE";
-        logger.info({ guild: this.guildId, channel: channel.id }, "Connected to voice channel");
+        logger.info(
+          {
+            guild: this.guildId,
+            channel: channel.id,
+            wsPing: this.connection.ping.ws,
+            udpPing: this.connection.ping.udp,
+            privacyCode: this.connection.voicePrivacyCode ? "available" : "unavailable",
+          },
+          "Connected to voice channel",
+        );
       } catch (error) {
         this.connection.destroy();
         this.connection = undefined;
@@ -140,6 +183,71 @@ export class GuildPlayer {
       const position = this.queue.enqueue(track);
       logger.info({ guild: this.guildId, track: track.title, position }, "Added to queue");
       return { started: false, position };
+    });
+  }
+
+  async playDiagnosticTone(): Promise<void> {
+    return this.runExclusive(async () => {
+      if (!this.connection || this.connection.state.status !== VoiceConnectionStatus.Ready) {
+        throw new Error("Voice connection is not ready");
+      }
+
+      if (this._currentTrack || this.audioPlayer.state.status !== AudioPlayerStatus.Idle) {
+        throw new Error("Stop the current playback before running /testaudio");
+      }
+
+      this.clearIdleTimer();
+      this.killProcesses();
+      this._state = "BUFFERING";
+
+      const ffmpeg = spawn(
+        env.ffmpegPath,
+        [
+          "-hide_banner",
+          "-loglevel",
+          "warning",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=frequency=440:sample_rate=48000:duration=3",
+          "-f",
+          "s16le",
+          "-ar",
+          "48000",
+          "-ac",
+          "2",
+          "pipe:1",
+        ],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+          shell: false,
+          windowsHide: true,
+        },
+      );
+
+      ffmpeg.stderr.on("data", (chunk: Buffer) => {
+        logger.warn(
+          { guild: this.guildId, ffmpeg: chunk.toString("utf8").trim() },
+          "Diagnostic FFmpeg stderr",
+        );
+      });
+
+      ffmpeg.on("error", (error) => {
+        logger.error({ err: error, guild: this.guildId }, "Diagnostic FFmpeg process error");
+      });
+
+      ffmpeg.on("close", (code, signal) => {
+        logger.info({ guild: this.guildId, code, signal }, "Diagnostic FFmpeg exited");
+      });
+
+      this.childProcesses = [ffmpeg];
+
+      const resource = createAudioResource(ffmpeg.stdout, {
+        inputType: StreamType.Raw,
+      });
+
+      this.audioPlayer.play(resource);
+      logger.info({ guild: this.guildId }, "Started 440 Hz diagnostic tone");
     });
   }
 
@@ -204,8 +312,8 @@ export class GuildPlayer {
   }
 
   private async startTrack(track: Track): Promise<void> {
-    if (!this.connection || this.connection.state.status === VoiceConnectionStatus.Destroyed) {
-      throw new Error("Bot is not connected to a voice channel");
+    if (!this.connection || this.connection.state.status !== VoiceConnectionStatus.Ready) {
+      throw new Error("Voice connection is not ready");
     }
 
     this.clearIdleTimer();
@@ -217,6 +325,14 @@ export class GuildPlayer {
       const { processes, resource } = await this.pipeline.create(track);
       this.childProcesses = processes;
       this.audioPlayer.play(resource);
+      logger.info(
+        {
+          guild: this.guildId,
+          track: track.title,
+          playableConnections: this.audioPlayer.playable.length,
+        },
+        "Audio resource submitted to player",
+      );
     } catch (error) {
       this._currentTrack = undefined;
       this._state = "ERROR";
