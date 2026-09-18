@@ -1,0 +1,38 @@
+"commands":
+  - changed-files:
+      - any-glob-to-any-file: "src/commands/**"
+
+"audio":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/audio/**"
+          - "src/music/**"
+          - "src/providers/**"
+
+"ui":
+  - changed-files:
+      - any-glob-to-any-file: "src/ui/**"
+
+"docker":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "Dockerfile"
+          - "docker-compose.yml"
+          - "docker-entrypoint.sh"
+          - ".dockerignore"
+
+"ci":
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+"documentation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+
+"dependencies":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "package.json"
+          - "package-lock.json"

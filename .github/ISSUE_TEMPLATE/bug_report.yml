@@ -1,0 +1,58 @@
+name: 🐛 Bug report
+description: Signaler un bug ou un comportement inattendu
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Décris clairement le bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+      placeholder: |
+        1. Lancer le bot avec `docker compose up`
+        2. Exécuter `/play ...`
+        3. Observer ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportement attendu
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environnement
+      options:
+        - Docker
+        - Local (npm run dev)
+        - Autre
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Hash du commit ou version.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs pertinents
+      description: Colle ici les logs (`docker compose logs`). Supprime tout token ou donnée sensible.
+      render: shell
+    validations:
+      required: false

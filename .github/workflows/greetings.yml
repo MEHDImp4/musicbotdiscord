@@ -1,0 +1,28 @@
+name: Greetings
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Greet first-time contributors
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: >-
+            Merci pour ta première contribution ! 🎉 / Thanks for your first contribution! 🎉
+            Un mainteneur va regarder ça rapidement. Pense à consulter le
+            [Code de conduite](https://github.com/MEHDImp4/pulse/blob/master/CODE_OF_CONDUCT.md)
+            et [CONTRIBUTING](https://github.com/MEHDImp4/pulse/blob/master/CONTRIBUTING.md).
+          pr-message: >-
+            Merci pour ta première pull request ! 🎉 / Thanks for your first pull request! 🎉
+            Vérifie que `npm run build` et `npm test` passent, puis un mainteneur la relira.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Question / aide
+    url: https://github.com/MEHDImp4/pulse/discussions
+    about: Pose une question ou demande de l'aide via les Discussions.
+  - name: 🔒 Signaler une vulnérabilité
+    url: https://github.com/MEHDImp4/pulse/security/advisories/new
+    about: Signale un problème de sécurité en privé (ne pas ouvrir d'issue publique).

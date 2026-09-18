@@ -1,0 +1,29 @@
+name: 📝 Documentation
+description: Signaler un manque ou une erreur dans la documentation
+title: "[Docs] "
+labels: ["documentation"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Emplacement
+      description: Quel fichier ou quelle section ?
+      placeholder: "README.md, section Configuration"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problème
+      description: Qu'est-ce qui est faux, manquant ou peu clair ?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggestion
+      description: Comment devrait-on le formuler ?
+    validations:
+      required: false
