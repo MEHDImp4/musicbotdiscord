@@ -41,20 +41,42 @@ export class AudioPipeline {
       },
     );
 
+    let ffmpegStderr = "";
+
     audioStream.pipe(ffmpeg.stdin);
 
     audioStream.on("error", (error) => {
       logger.error({ err: error, track: track.title }, "yt-dlp stream error");
     });
 
-    ffmpeg.stdin.on("error", () => {});
+    ffmpeg.stdin.on("error", (error) => {
+      logger.debug({ err: error, track: track.title }, "FFmpeg stdin closed");
+    });
 
     ffmpeg.stderr.on("data", (chunk: Buffer) => {
-      logger.debug({ track: track.title, ffmpeg: chunk.toString("utf8").trim() }, "ffmpeg");
+      const text = chunk.toString("utf8");
+      ffmpegStderr = (ffmpegStderr + text).slice(-8000);
+      logger.debug({ track: track.title, ffmpeg: text.trim() }, "FFmpeg stderr");
     });
 
     ffmpeg.on("error", (error) => {
-      logger.error({ err: error, track: track.title }, "ffmpeg process error");
+      logger.error({ err: error, track: track.title }, "FFmpeg process error");
+    });
+
+    ffmpeg.on("close", (code, signal) => {
+      if (code !== 0 && signal !== "SIGKILL") {
+        logger.error(
+          {
+            track: track.title,
+            code,
+            signal,
+            stderr: ffmpegStderr.trim(),
+          },
+          "FFmpeg exited with an error",
+        );
+      } else {
+        logger.info({ track: track.title, code, signal }, "FFmpeg exited");
+      }
     });
 
     const resource = createAudioResource(ffmpeg.stdout, {
