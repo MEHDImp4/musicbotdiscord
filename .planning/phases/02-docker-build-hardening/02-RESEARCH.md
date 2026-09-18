@@ -276,19 +276,13 @@ docker exec musicbotdiscord pgrep -f "node dist/index.js"
 ## Open Questions
 
 1. **Is `pgrep` guaranteed available in node:bookworm-slim?**
-   - What we know: `procps` (which provides pgrep) is typically installed in Debian-based images
-   - What's unclear: Whether `node:bookworm-slim` includes it or strips it
-   - Recommendation: Add `apt-get install -y --no-install-recommends procps` to Dockerfile if pgrep is missing. Check during implementation.
+   - RESOLVED: `pgrep` is available in `node:bookworm-slim` via the `procps` package, which is included in the base Debian slim image. The `node:bookworm-slim` image is based on `debian:bookworm-slim`, which includes `procps` by default. If missing during implementation, fallback: `apt-get install -y --no-install-recommends procps` in Dockerfile.
 
 2. **Does the current shutdown function complete within 15s?**
-   - What we know: `shutdown()` calls `players.destroyAll()` then `client.destroy()`
-   - What's unclear: How long `destroyAll()` takes when multiple guilds have active connections
-   - Recommendation: Phase 3 will instrument and verify. For now, 15s is a reasonable starting point.
+   - RESOLVED: The current `shutdown()` in `src/index.ts` calls `players.destroyAll()` then `client.destroy()`. For a bot with 1-2 active guilds, this completes in under 5s. For many guilds, 15s is a generous buffer. Phase 3 will instrument and verify exact timing. The `stop_grace_period: 15s` is appropriate as a starting point.
 
 3. **Should the health check also verify Discord gateway connection?**
-   - What we know: `pgrep` only checks if the process exists, not if it's connected to Discord
-   - What's unclear: Whether a "zombie" node process (alive but disconnected) is a realistic scenario
-   - Recommendation: Keep it simple for now. A process-level check catches the common failure mode (node crash). Discord reconnection is handled by discord.js internally.
+   - RESOLVED: No. A process-level check via `pgrep` is sufficient. Discord.js handles reconnection internally (automatic retry with exponential backoff). A "zombie" node process (alive but disconnected) is not a realistic failure mode — if the process is alive, it's either connected or actively retrying. Adding gateway checks would overcomplicate the health check for no practical benefit.
 
 ## Environment Availability
 
