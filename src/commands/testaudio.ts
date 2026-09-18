@@ -1,0 +1,46 @@
+import { SlashCommandBuilder } from "discord.js";
+import { canJoinAndSpeak, memberVoiceChannel } from "./helpers";
+import type { CommandDefinition } from "./types";
+
+export const testaudio: CommandDefinition = {
+  data: new SlashCommandBuilder()
+    .setName("testaudio")
+    .setDescription("Joue un bip local de 3 secondes pour tester Discord Voice"),
+  usage: "/testaudio",
+  async execute(interaction, { players }) {
+    if (!interaction.guildId || !interaction.guild) {
+      await interaction.reply({ content: "❌ Cette commande doit être utilisée dans un serveur.", ephemeral: true });
+      return;
+    }
+
+    const channel = await memberVoiceChannel(interaction);
+    if (!channel) {
+      await interaction.reply({ content: "❌ Rejoins d'abord un salon vocal.", ephemeral: true });
+      return;
+    }
+
+    const existing = players.get(interaction.guildId);
+    if (existing?.isConnected && existing.channelId !== channel.id) {
+      await interaction.reply({ content: "❌ Tu dois être dans le même salon vocal que le bot.", ephemeral: true });
+      return;
+    }
+
+    if (!canJoinAndSpeak(channel, interaction)) {
+      await interaction.reply({ content: "❌ Je n'ai pas la permission de rejoindre ou parler dans ce salon.", ephemeral: true });
+      return;
+    }
+
+    await interaction.deferReply();
+
+    try {
+      const player = players.getOrCreate(interaction.guildId);
+      if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
+      await player.connect(channel);
+      await player.playDiagnosticTone();
+      await interaction.editReply("🔊 Test audio lancé : tu dois entendre un bip de 440 Hz pendant 3 secondes.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      await interaction.editReply(`❌ Test audio impossible : ${message}`);
+    }
+  },
+};

@@ -1,12 +1,17 @@
+import type { Client } from "discord.js";
 import { env } from "../config/env";
 import type { AudioProvider } from "../providers/AudioProvider";
-import type { RequestedBy, Track } from "./Track";
+import { logger } from "../utils/logger";
 import { GuildPlayer } from "./GuildPlayer";
+import type { RequestedBy, Track } from "./Track";
 
 export class PlayerManager {
   private readonly players = new Map<string, GuildPlayer>();
 
-  constructor(private readonly provider: AudioProvider) {}
+  constructor(
+    private readonly provider: AudioProvider,
+    private readonly client?: Client,
+  ) {}
 
   get(guildId: string): GuildPlayer | undefined {
     return this.players.get(guildId);
@@ -16,11 +21,30 @@ export class PlayerManager {
     const existing = this.players.get(guildId);
     if (existing) return existing;
 
-    const player = new GuildPlayer(guildId, this.provider, (id) => {
-      if (this.players.get(id) === player) this.players.delete(id);
-    });
+    const player = new GuildPlayer(
+      guildId,
+      this.provider,
+      (id) => {
+        if (this.players.get(id) === player) this.players.delete(id);
+      },
+      (channelId, content) => {
+        void this.notify(channelId, content);
+      },
+    );
     this.players.set(guildId, player);
     return player;
+  }
+
+  private async notify(channelId: string, content: string): Promise<void> {
+    if (!this.client) return;
+    try {
+      const channel = await this.client.channels.fetch(channelId).catch(() => null);
+      if (channel?.isTextBased() && !channel.isDMBased()) {
+        await channel.send(content);
+      }
+    } catch (error) {
+      logger.warn({ err: error, channelId }, "Failed to deliver notification");
+    }
   }
 
   async destroy(guildId: string): Promise<void> {
@@ -56,5 +80,9 @@ export class PlayerManager {
     return [...this.players.entries()]
       .filter(([, player]) => player.isConnected)
       .map(([guildId]) => guildId);
+  }
+
+  activePlayers(): GuildPlayer[] {
+    return [...this.players.values()].filter((player) => player.isConnected);
   }
 }

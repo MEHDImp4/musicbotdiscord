@@ -49,7 +49,19 @@ function toTrack(info: YtDlpInfo, requestedBy: RequestedBy): Track {
 }
 
 function commonArgs(): string[] {
-  return ["--js-runtimes", "node", "--no-playlist", "--no-warnings"];
+  const args = ["--js-runtimes", "node", "--no-playlist", "--no-warnings"];
+  if (env.ytdlpCookiesFile) {
+    args.push("--cookies", env.ytdlpCookiesFile);
+  }
+  return args;
+}
+
+function streamArgs(): string[] {
+  const args = [...commonArgs()];
+  if (env.sponsorblockCategories) {
+    args.push("--sponsorblock-remove", env.sponsorblockCategories);
+  }
+  return args;
 }
 
 export class YouTubeProvider implements AudioProvider {
@@ -71,7 +83,7 @@ export class YouTubeProvider implements AudioProvider {
 
   async createReadStream(track: Track): Promise<{ stream: Readable; process: ChildProcess }> {
     const args = [
-      ...commonArgs(),
+      ...streamArgs(),
       "-f",
       "bestaudio/best",
       "-o",

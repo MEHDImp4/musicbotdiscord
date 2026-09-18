@@ -13,7 +13,7 @@ export interface AudioPipelineResult {
 export class AudioPipeline {
   constructor(private readonly provider: AudioProvider) {}
 
-  async create(track: Track): Promise<AudioPipelineResult> {
+  async create(track: Track, volume = 100): Promise<AudioPipelineResult> {
     const { stream: audioStream, process: ytdlpProcess } = await this.provider.createReadStream(track);
 
     const ffmpeg = spawn(
@@ -82,7 +82,11 @@ export class AudioPipeline {
     const resource = createAudioResource(ffmpeg.stdout, {
       inputType: StreamType.Raw,
       metadata: track,
+      inlineVolume: true,
     });
+    if (resource.volume) {
+      resource.volume.setVolume(volume / 100);
+    }
 
     return { processes: [ytdlpProcess, ffmpeg], resource };
   }

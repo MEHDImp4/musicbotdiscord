@@ -8,6 +8,22 @@ function intEnv(name: string, fallback: number): number {
   return value;
 }
 
+function floatEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`Invalid number environment variable: ${name}`);
+  }
+  return value;
+}
+
+function boolEnv(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (raw === undefined || raw === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(raw);
+}
+
 function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
@@ -26,6 +42,15 @@ export const env = {
   maxStreamRetries: intEnv("MAX_STREAM_RETRIES", 2),
   ytdlpPath: process.env.YTDLP_PATH?.trim() || "yt-dlp",
   ffmpegPath: process.env.FFMPEG_PATH?.trim() || "ffmpeg",
+  ytdlpCookiesFile: process.env.YTDLP_COOKIES_FILE?.trim() || undefined,
+  sponsorblockCategories: process.env.SPONSORBLOCK_CATEGORIES?.trim() ?? "sponsor,selfpromo",
   externalProcessTimeoutMs: intEnv("EXTERNAL_PROCESS_TIMEOUT_MS", 20_000),
   voiceConnectionTimeoutMs: intEnv("VOICE_CONNECTION_TIMEOUT_MS", 20_000),
+  commandCooldownSeconds: intEnv("COMMAND_COOLDOWN_SECONDS", 5),
+  nowPlayingLive: boolEnv("NOWPLAYING_LIVE", true),
+  voteSkipMin: intEnv("VOTE_SKIP_MIN", 2),
+  voteSkipRatio: floatEnv("VOTE_SKIP_RATIO", 0.5),
+  volumeStep: intEnv("VOLUME_STEP", 10),
+  autocompleteEnabled: boolEnv("AUTOCOMPLETE_ENABLED", true),
+  suggestTimeoutMs: intEnv("SUGGEST_TIMEOUT_MS", 800),
 } as const;

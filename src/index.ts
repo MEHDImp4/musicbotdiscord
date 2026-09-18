@@ -1,11 +1,16 @@
 import { generateDependencyReport } from "@discordjs/voice";
 import { Client, Events, GatewayIntentBits } from "discord.js";
-import { commandMap } from "./commands";
+import { commands, commandMap } from "./commands";
+import type { CommandContext } from "./commands/types";
 import { handleMusicControl } from "./interactions/musicControls";
+import { handleQueuePagination } from "./interactions/queuePagination";
 import { env } from "./config/env";
 import { PlayerManager } from "./music/PlayerManager";
 import { YouTubeProvider } from "./providers/YouTubeProvider";
+import { YouTubeSuggestions } from "./services/suggestions";
+import { startNowPlayingUpdater } from "./services/nowPlaying";
 import { createShutdown } from "./shutdown";
+import { clearCooldowns, checkCooldown } from "./utils/cooldown";
 import { logger } from "./utils/logger";
 
 logger.info(
@@ -17,37 +22,57 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 });
 
-const players = new PlayerManager(new YouTubeProvider());
+const players = new PlayerManager(new YouTubeProvider(), client);
+const suggestions = new YouTubeSuggestions(env.suggestTimeoutMs);
+const commandContext: CommandContext = { players, commands };
 
 client.once(Events.ClientReady, (readyClient) => {
   logger.info({ user: readyClient.user.tag, guilds: readyClient.guilds.cache.size }, "Discord client ready");
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    await handleAutocomplete(interaction);
+    return;
+  }
+
   if (interaction.isButton()) {
     try {
-      const handled = await handleMusicControl(interaction, players);
-      if (handled) return;
+      if (await handleMusicControl(interaction, players)) return;
+      if (await handleQueuePagination(interaction, players)) return;
     } catch (error) {
       logger.error(
         { err: error, customId: interaction.customId, guild: interaction.guildId },
-        "Music control button failed",
+        "Button interaction failed",
       );
+      const message = "❌ Impossible d'exécuter cette action.";
       if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({ content: "❌ Impossible d'exécuter cette action.", ephemeral: true }).catch(() => undefined);
+        await interaction.followUp({ content: message, ephemeral: true }).catch(() => undefined);
       } else {
-        await interaction.reply({ content: "❌ Impossible d'exécuter cette action.", ephemeral: true }).catch(() => undefined);
+        await interaction.reply({ content: message, ephemeral: true }).catch(() => undefined);
       }
-      return;
     }
+    return;
   }
 
   if (!interaction.isChatInputCommand()) return;
   const command = commandMap.get(interaction.commandName);
   if (!command) return;
 
+  const player = interaction.guildId ? players.get(interaction.guildId) : undefined;
+  if (player && interaction.channelId) player.lastTextChannelId = interaction.channelId;
+
+  const cooldownMs = (command.cooldownSeconds ?? env.commandCooldownSeconds) * 1000;
+  const remaining = checkCooldown(`${interaction.user.id}:${command.data.name}`, cooldownMs);
+  if (remaining !== null) {
+    await interaction
+      .reply({ content: `⏳ Patiente encore ${remaining} seconde(s) avant de réutiliser cette commande.`, ephemeral: true })
+      .catch(() => undefined);
+    return;
+  }
+
   try {
-    await command.execute(interaction, { players });
+    await command.execute(interaction, commandContext);
   } catch (error) {
     logger.error({ err: error, command: interaction.commandName, guild: interaction.guildId }, "Command failed");
     const message = "❌ Une erreur inattendue est survenue.";
@@ -58,6 +83,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 });
+
+async function handleAutocomplete(interaction: import("discord.js").AutocompleteInteraction): Promise<void> {
+  const focused = interaction.options.getFocused(true);
+
+  if (!env.autocompleteEnabled || !["play", "playnext"].includes(interaction.commandName) || focused.name !== "query") {
+    await interaction.respond([]).catch(() => undefined);
+    return;
+  }
+
+  const choices = await suggestions.suggest(String(focused.value ?? ""));
+  await interaction.respond(choices).catch(() => undefined);
+}
 
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   const guild = newState.guild ?? oldState.guild;
@@ -72,9 +109,19 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   else player.handleHumansPresent();
 });
 
+const stopNowPlayingUpdater = env.nowPlayingLive ? startNowPlayingUpdater(players) : () => undefined;
+
 const shutdown = createShutdown({ client, players, logger });
-process.once("SIGINT", () => void shutdown("SIGINT"));
-process.once("SIGTERM", () => void shutdown("SIGTERM"));
+process.once("SIGINT", () => {
+  stopNowPlayingUpdater();
+  clearCooldowns();
+  void shutdown("SIGINT");
+});
+process.once("SIGTERM", () => {
+  stopNowPlayingUpdater();
+  clearCooldowns();
+  void shutdown("SIGTERM");
+});
 
 client.login(env.discordToken).catch((error) => {
   logger.fatal({ err: error }, "Unable to login to Discord");

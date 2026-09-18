@@ -8,9 +8,10 @@ import {
   createAudioResource,
   entersState,
   joinVoiceChannel,
+  type AudioResource,
   type VoiceConnection,
 } from "@discordjs/voice";
-import type { VoiceBasedChannel } from "discord.js";
+import type { Message, VoiceBasedChannel } from "discord.js";
 import { AudioPipeline } from "../audio/AudioPipeline";
 import { env } from "../config/env";
 import type { AudioProvider } from "../providers/AudioProvider";
@@ -24,6 +25,34 @@ export interface AddTrackResult {
   position: number;
 }
 
+export type LoopMode = "off" | "track" | "queue";
+
+export type NotifyFn = (channelId: string, content: string) => void;
+
+/**
+ * Pure decision for the next track to play. Mutates the queue to implement
+ * loop-queue semantics. Exported for testability.
+ */
+export function decideNext(
+  finished: Track | undefined,
+  loopMode: LoopMode,
+  queue: QueueManager,
+): Track | undefined {
+  if (finished && loopMode === "track") return finished;
+
+  const next = queue.dequeue();
+
+  if (finished && loopMode === "queue") {
+    try {
+      queue.enqueue(finished);
+    } catch {
+      // Queue is full: drop the re-queue rather than crash playback.
+    }
+  }
+
+  return next ?? (finished && loopMode === "queue" ? finished : undefined);
+}
+
 export class GuildPlayer {
   readonly queue = new QueueManager(env.maxQueueSize);
   readonly audioPlayer = createAudioPlayer({
@@ -33,18 +62,25 @@ export class GuildPlayer {
   private readonly pipeline: AudioPipeline;
   private connection?: VoiceConnection;
   private childProcesses: ChildProcess[] = [];
+  private currentResource?: AudioResource;
   private idleTimer?: NodeJS.Timeout;
   private emptyChannelTimer?: NodeJS.Timeout;
   private serial: Promise<unknown> = Promise.resolve();
   private destroyed = false;
+  private bypassLoop = false;
   private _currentTrack?: Track;
   private _state: PlayerState = "IDLE";
   private _lastTextChannelId?: string;
+  private _volume = 100;
+  private _loopMode: LoopMode = "off";
+  private readonly skipVotes = new Set<string>();
+  private _nowPlayingMessage?: Message;
 
   constructor(
     readonly guildId: string,
     provider: AudioProvider,
     private readonly onDestroyed: (guildId: string) => void,
+    private readonly onNotify?: NotifyFn,
   ) {
     this.pipeline = new AudioPipeline(provider);
 
@@ -68,9 +104,14 @@ export class GuildPlayer {
       void this.runExclusive(async () => {
         if (this.destroyed) return;
         logger.info({ guild: this.guildId }, "Audio player entered IDLE");
+        const finished = this._currentTrack;
         await this.killProcesses();
+        this.currentResource = undefined;
         this._currentTrack = undefined;
-        await this.playNextInternal();
+        this.skipVotes.clear();
+        const loopBack = this.bypassLoop ? undefined : finished;
+        this.bypassLoop = false;
+        await this.playNextInternal(loopBack);
       });
     });
 
@@ -114,6 +155,41 @@ export class GuildPlayer {
 
   set lastTextChannelId(id: string | undefined) {
     this._lastTextChannelId = id;
+  }
+
+  get volume(): number {
+    return this._volume;
+  }
+
+  set volume(value: number) {
+    this._volume = Math.max(0, Math.min(100, Math.round(value)));
+    if (this.currentResource?.volume) {
+      this.currentResource.volume.setVolume(this._volume / 100);
+    }
+  }
+
+  get loopMode(): LoopMode {
+    return this._loopMode;
+  }
+
+  set loopMode(mode: LoopMode) {
+    this._loopMode = mode;
+  }
+
+  get skipVoteCount(): number {
+    return this.skipVotes.size;
+  }
+
+  get playbackElapsedMs(): number | undefined {
+    return this.currentResource?.playbackDuration;
+  }
+
+  get nowPlayingMessage(): Message | undefined {
+    return this._nowPlayingMessage;
+  }
+
+  setNowPlayingMessage(message: Message | undefined): void {
+    this._nowPlayingMessage = message;
   }
 
   async connect(channel: VoiceBasedChannel): Promise<void> {
@@ -195,6 +271,39 @@ export class GuildPlayer {
     });
   }
 
+  async playNext(track: Track): Promise<AddTrackResult> {
+    return this.runExclusive(async () => {
+      this.clearIdleTimer();
+      if (!this._currentTrack && this.audioPlayer.state.status === AudioPlayerStatus.Idle) {
+        await this.startTrack(track);
+        return { started: true, position: 0 };
+      }
+
+      const position = this.queue.enqueueFront(track);
+      logger.info({ guild: this.guildId, track: track.title }, "Queued next");
+      return { started: false, position };
+    });
+  }
+
+  async voteSkip(userId: string, threshold: number): Promise<{ votes: number; skipped: boolean }> {
+    return this.runExclusive(async () => {
+      if (!this._currentTrack) return { votes: this.skipVotes.size, skipped: false };
+
+      this.skipVotes.add(userId);
+      const votes = this.skipVotes.size;
+
+      if (votes >= threshold) {
+        this.skipVotes.clear();
+        this.bypassLoop = true;
+        await this.killProcesses();
+        this.audioPlayer.stop(true);
+        return { votes, skipped: true };
+      }
+
+      return { votes, skipped: false };
+    });
+  }
+
   async playDiagnosticTone(): Promise<void> {
     return this.runExclusive(async () => {
       if (!this.connection || this.connection.state.status !== VoiceConnectionStatus.Ready) {
@@ -253,7 +362,10 @@ export class GuildPlayer {
 
       const resource = createAudioResource(ffmpeg.stdout, {
         inputType: StreamType.Raw,
+        inlineVolume: true,
       });
+      if (resource.volume) resource.volume.setVolume(this._volume / 100);
+      this.currentResource = resource;
 
       this.audioPlayer.play(resource);
       logger.info({ guild: this.guildId }, "Started 440 Hz diagnostic tone");
@@ -271,6 +383,7 @@ export class GuildPlayer {
   async skip(): Promise<boolean> {
     return this.runExclusive(async () => {
       if (!this._currentTrack) return false;
+      this.bypassLoop = true;
       await this.killProcesses();
       return this.audioPlayer.stop(true);
     });
@@ -281,6 +394,8 @@ export class GuildPlayer {
       this._state = "STOPPING";
       this.queue.clear();
       this._currentTrack = undefined;
+      this.skipVotes.clear();
+      this.bypassLoop = true;
       await this.killProcesses();
       this.audioPlayer.stop(true);
       this._state = "IDLE";
@@ -303,8 +418,8 @@ export class GuildPlayer {
     this.clearEmptyChannelTimer();
   }
 
-  private async playNextInternal(): Promise<void> {
-    const next = this.queue.dequeue();
+  private async playNextInternal(finished?: Track): Promise<void> {
+    const next = decideNext(finished, this._loopMode, this.queue);
     if (!next) {
       this._state = "IDLE";
       this.scheduleIdleDisconnect();
@@ -328,24 +443,52 @@ export class GuildPlayer {
     this.clearIdleTimer();
     this._state = "BUFFERING";
     this._currentTrack = track;
+    this.skipVotes.clear();
     await this.killProcesses();
 
+    const attempts = Math.max(1, env.maxStreamRetries + 1);
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const { processes, resource } = await this.pipeline.create(track, this._volume);
+        this.childProcesses = processes;
+        this.currentResource = resource;
+        this.audioPlayer.play(resource);
+        logger.info(
+          {
+            guild: this.guildId,
+            track: track.title,
+            attempt,
+            playableConnections: this.audioPlayer.playable.length,
+          },
+          "Audio resource submitted to player",
+        );
+        return;
+      } catch (error) {
+        lastError = error;
+        logger.warn(
+          { err: error, guild: this.guildId, track: track.title, attempt, attempts },
+          "Track start attempt failed",
+        );
+        await this.killProcesses();
+      }
+    }
+
+    this._currentTrack = undefined;
+    this._state = "ERROR";
+    this.notifyTrackError(track, attempts, lastError);
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  private notifyTrackError(track: Track, attempts: number, error: unknown): void {
+    if (!this.onNotify || !this._lastTextChannelId) return;
+    const reason = error instanceof Error ? error.message : "erreur inconnue";
+    const suffix = attempts > 1 ? ` après ${attempts} tentatives` : "";
     try {
-      const { processes, resource } = await this.pipeline.create(track);
-      this.childProcesses = processes;
-      this.audioPlayer.play(resource);
-      logger.info(
-        {
-          guild: this.guildId,
-          track: track.title,
-          playableConnections: this.audioPlayer.playable.length,
-        },
-        "Audio resource submitted to player",
-      );
-    } catch (error) {
-      this._currentTrack = undefined;
-      this._state = "ERROR";
-      throw error;
+      this.onNotify(this._lastTextChannelId, `❌ Impossible de lire **${track.title}**${suffix} : ${reason}`);
+    } catch (notifyError) {
+      logger.warn({ err: notifyError, guild: this.guildId }, "Failed to send error notification");
     }
   }
 
@@ -426,6 +569,9 @@ export class GuildPlayer {
     this.queue.clear();
     this._currentTrack = undefined;
     this._lastTextChannelId = undefined;
+    this.currentResource = undefined;
+    this._nowPlayingMessage = undefined;
+    this.skipVotes.clear();
     await this.killProcesses();
     this.audioPlayer.stop(true);
     if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
