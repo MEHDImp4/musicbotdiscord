@@ -48,6 +48,10 @@ function toTrack(info: YtDlpInfo, requestedBy: RequestedBy): Track {
   };
 }
 
+function commonArgs(): string[] {
+  return ["--js-runtimes", "node", "--no-playlist", "--no-warnings"];
+}
+
 export class YouTubeProvider implements AudioProvider {
   async search(query: string, requestedBy: RequestedBy): Promise<Track> {
     const normalized = query.trim();
@@ -66,18 +70,50 @@ export class YouTubeProvider implements AudioProvider {
   }
 
   async createReadStream(track: Track): Promise<{ stream: Readable; process: ChildProcess }> {
+    const args = [
+      ...commonArgs(),
+      "-f",
+      "bestaudio/best",
+      "-o",
+      "-",
+      track.webpageUrl,
+    ];
+
     const ytdlp = spawn(
       env.ytdlpPath,
-      ["--no-playlist", "--no-warnings", "-f", "bestaudio/best", "-o", "-", track.webpageUrl],
+      args,
       { stdio: ["ignore", "pipe", "pipe"], shell: false, windowsHide: true },
     );
 
+    let stderr = "";
+
     ytdlp.stderr.on("data", (chunk: Buffer) => {
-      logger.debug({ track: track.title, ytdlp: chunk.toString("utf8").trim() }, "yt-dlp stderr");
+      const text = chunk.toString("utf8");
+      stderr = (stderr + text).slice(-8000);
+      logger.debug({ track: track.title, ytdlp: text.trim() }, "yt-dlp stderr");
     });
 
     ytdlp.on("error", (error) => {
       logger.error({ err: error, track: track.title }, "yt-dlp process error");
+    });
+
+    ytdlp.on("close", (code, signal) => {
+      if (code !== 0) {
+        logger.error(
+          {
+            track: track.title,
+            code,
+            signal,
+            stderr: stderr.trim(),
+          },
+          "yt-dlp exited with an error",
+        );
+      } else {
+        logger.info(
+          { track: track.title, code, signal },
+          "yt-dlp stream finished",
+        );
+      }
     });
 
     return { stream: ytdlp.stdout, process: ytdlp };
@@ -86,7 +122,7 @@ export class YouTubeProvider implements AudioProvider {
   private async fetchInfo(target: string): Promise<YtDlpInfo> {
     const { stdout } = await runProcess(
       env.ytdlpPath,
-      ["--dump-json", "--skip-download", "--no-playlist", "--no-warnings", target],
+      [...commonArgs(), "--dump-json", "--skip-download", target],
       { timeoutMs: env.externalProcessTimeoutMs },
     );
 
