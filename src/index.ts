@@ -1,11 +1,17 @@
-import { generateDependencyReport } from "@discordjs/voice";\nimport { Client, Events, GatewayIntentBits } from "discord.js";
+import { generateDependencyReport } from "@discordjs/voice";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { commandMap } from "./commands";
 import { env } from "./config/env";
 import { PlayerManager } from "./music/PlayerManager";
 import { YouTubeProvider } from "./providers/YouTubeProvider";
 import { logger } from "./utils/logger";
 
-logger.info({ node: process.version, report: generateDependencyReport() }, "Discord voice dependency report");\n\nconst client = new Client({
+logger.info(
+  { node: process.version, report: generateDependencyReport() },
+  "Discord voice dependency report",
+);
+
+const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 });
 
