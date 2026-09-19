@@ -25,6 +25,13 @@ We aim to acknowledge reports within a few days. Credit will be given unless you
 
 Do **not** paste your Discord token, cookies, or `.env` contents in an issue, PR, or discussion. If you accidentally expose a token, **revoke it immediately** in the [Discord Developer Portal](https://discord.com/developers/applications) and generate a new one.
 
+### Dependencies and known advisories
+
+Dependencies are reviewed weekly via Dependabot and `npm audit`.
+
+- **`tar` (critical/high) via `@discordjs/opus` → `@discordjs/node-pre-gyp`**: no upstream fix is available. The affected chain is only used at install time to download prebuilt native binaries, not at runtime. CI installs from the committed lockfile; treat install-time network/registry access as trusted.
+- **`@discordjs/voice`** is intentionally pinned to a `1.0.0-dev` snapshot (Dependabot ignores it). Re-evaluate on every manual bump, as pre-release builds can change without notice.
+
 ### Scope
 
 In scope: this repository's source code, Docker setup, and CI workflows.
@@ -56,6 +63,13 @@ Nous visons une réponse sous quelques jours. Le crédit sera donné, sauf si tu
 ### Ne jamais partager de secret
 
 **Ne colle jamais** ton token Discord, tes cookies ou le contenu de `.env` dans une issue, une PR ou une discussion. Si tu exposes un token par accident, **révoque-le immédiatement** dans le [portail développeurs Discord](https://discord.com/developers/applications) et génères-en un nouveau.
+
+### Dépendances et avis connus
+
+Les dépendances sont surveillées chaque semaine par Dependabot et `npm audit`.
+
+- **`tar` (critique/high) via `@discordjs/opus` → `@discordjs/node-pre-gyp`** : aucun correctif amont n'est disponible. Cette chaîne ne sert qu'à l'installation (téléchargement de binaires natifs préconstruits), jamais à l'exécution. La CI installe depuis le lockfile committé ; considère l'accès réseau/registre à l'installation comme de confiance.
+- **`@discordjs/voice`** est volontairement épinglé à un snapshot `1.0.0-dev` (ignoré par Dependabot). À réévaluer à chaque montée de version manuelle, un build pré-release pouvant changer sans préavis.
 
 ### Périmètre
 

@@ -1,6 +1,7 @@
 # Codebase Concerns
 
 **Analysis Date:** 2026-09-18
+**Last reviewed:** 2026-09-19 — see “Update (2026-09-19)” at the end for items resolved since v2.
 
 ## Tech Debt
 
@@ -189,6 +190,29 @@
 - Files: `tests/PlayerManager.test.ts:6-16`
 - Risk: Tests pass but don't validate the real interface contract. Any future test calling `createReadStream` on the stub would get `undefined`.
 - Priority: Low
+
+---
+
+## Update (2026-09-19)
+
+Resolved since this audit (v2 + hardening pass):
+
+- **Monolithic command file** → one file per command in `src/commands/*.ts` + barrel `index.ts` + `helpers.ts`/`types.ts`.
+- **Unused `maxStreamRetries`** → retry loop implemented in `GuildPlayer.startTrack` (`src/music/GuildPlayer.ts`).
+- **No stream retry / no graceful child-process shutdown** → SIGTERM→SIGKILL escalation awaiting real exit (`killProcesses`), and graceful shutdown persisted queues/settings.
+- **No rate limiting** → per-user+command cooldown (`src/utils/cooldown.ts`), env `COMMAND_COOLDOWN_SECONDS`.
+- **No runtime/external-tool health check** → still open; `yt-dlp`/`ffmpeg` availability is only detected on first play.
+- **`getStreamUrl()` test stub** → corrected to `createSource()` in `tests/GuildPlayer.test.ts`.
+- **Docker `--break-system-packages`** → yt-dlp now lives in an isolated venv (`/opt/ytdlp`) owned by the `node` user; container runs as non-root.
+- **`bot.err` not ignored** → `.gitignore` covers `*.err`.
+- **`tests/` not type-checked** → `npm run typecheck` now checks `src` + `tests` (`tsconfig.test.json`) and runs in CI.
+- **New:** SSRF guard for direct HTTP(S) playback (`src/utils/net.ts`) incl. IPv6 mapped/NAT64/6to4 handling; bounded HTTP bodies (`src/utils/http.ts`).
+
+Still open / to watch:
+
+- `@discordjs/voice` pinned to a `1.0.0-dev` snapshot (documented in `SECURITY.md`).
+- `tar` advisory via `@discordjs/opus` (install-time only, no upstream fix).
+- `playNextInternal` remains recursive on consecutive track failures (bounded by `MAX_QUEUE_SIZE`).
 
 ---
 
