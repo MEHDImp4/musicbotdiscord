@@ -28,14 +28,42 @@ export async function fetchText(url: string, options: FetchJsonOptions = {}): Pr
     }
 
     const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.byteLength > maxBytes) {
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
       throw new Error(`Response too large (${url})`);
     }
-    return buffer.toString("utf8");
+
+    return await readBounded(response, maxBytes, url);
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function readBounded(response: Response, maxBytes: number, url: string): Promise<string> {
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error(`Response too large (${url})`);
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 /** Small JSON fetch helper with a hard timeout. Throws on non-2xx or invalid JSON. */
