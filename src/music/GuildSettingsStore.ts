@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { isFilterPreset, type FilterPreset } from "../audio/filters";
 import { env } from "../config/env";
@@ -19,7 +19,7 @@ export const DEFAULT_GUILD_SETTINGS: GuildSettings = {
   filter: "off",
 };
 
-const LOOP_MODES: readonly LoopMode[] = ["off", "track", "queue"];
+export const LOOP_MODES: readonly LoopMode[] = ["off", "track", "queue"];
 
 export function sanitizeSettings(input: unknown): GuildSettings {
   const raw = (input ?? {}) as Partial<GuildSettings>;
@@ -71,6 +71,9 @@ export class GuildSettingsStore {
       const raw = readFileSync(this.filePath, "utf8");
       const parsed = JSON.parse(raw) as Record<string, unknown>;
 
+      this.guilds.clear();
+      this.sessions.clear();
+
       if (parsed && parsed.version === 2) {
         const guilds = (parsed.guilds ?? {}) as Record<string, unknown>;
         const sessions = (parsed.sessions ?? {}) as Record<string, unknown>;
@@ -80,6 +83,8 @@ export class GuildSettingsStore {
         for (const [sessionId, value] of Object.entries(sessions)) {
           this.sessions.set(sessionId, sanitizeSettings(value));
         }
+      } else if (parsed && parsed.version !== undefined) {
+        logger.warn({ version: parsed.version, file: this.filePath }, "Unsupported guild settings version, using defaults");
       } else {
         // Legacy v1: every top-level key is a guild id.
         for (const [guildId, value] of Object.entries(parsed)) {
@@ -114,11 +119,10 @@ export class GuildSettingsStore {
   }
 
   update(sessionId: string, guildId: string, patch: Partial<GuildSettings>): GuildSettings {
+    // Only the session is mutated: writing back to guild defaults would leak
+    // one channel's volume/filter into every other channel of the guild.
     const next = mergeSettings(this.get(sessionId, guildId), patch);
     this.sessions.set(sessionId, next);
-    // Keep the guild defaults in sync with the most recent session values so a
-    // newly joined channel inherits sensible settings.
-    this.guilds.set(guildId, next);
     this.scheduleSave();
     return next;
   }
@@ -144,6 +148,11 @@ export class GuildSettingsStore {
       writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
       renameSync(tmp, this.filePath);
     } catch (error) {
+      try {
+        unlinkSync(`${this.filePath}.tmp`);
+      } catch {
+        // Nothing to clean up.
+      }
       logger.warn({ err: error, file: this.filePath }, "Failed to save guild settings");
     }
   }

@@ -1,4 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
+import { LOOP_MODES } from "../music/GuildSettingsStore";
+import type { LoopMode } from "../music/GuildPlayer";
 import { replyTemporary } from "../utils/reply";
 import { requireControlChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
@@ -35,7 +37,12 @@ export const loop: CommandDefinition = {
       return;
     }
 
-    context.player.loopMode = mode as "off" | "track" | "queue";
+    if (!LOOP_MODES.includes(mode as LoopMode)) {
+      await replyTemporary(interaction, "❌ Mode de répétition inconnu.");
+      return;
+    }
+
+    context.player.loopMode = mode as LoopMode;
     await replyTemporary(interaction, `🔁 Répétition réglée sur **${LABELS[mode]}**.`);
   },
 };

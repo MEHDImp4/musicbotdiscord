@@ -5,6 +5,7 @@ import type { CommandDefinition } from "./types";
 
 const MAX_SESSIONS = 10;
 const MAX_TITLE = 40;
+const MAX_DESCRIPTION = 4_096;
 
 function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
@@ -57,7 +58,11 @@ export const status: CommandDefinition = {
       lines.push(`… et ${active.length - MAX_SESSIONS} autre(s) session(s).`);
     }
 
-    embed.setDescription(lines.join("\n\n"));
+    let description = lines.join("\n\n");
+    if (description.length > MAX_DESCRIPTION) {
+      description = `${description.slice(0, MAX_DESCRIPTION - 1)}…`;
+    }
+    embed.setDescription(description);
     await interaction.reply({ embeds: [embed] });
   },
 };

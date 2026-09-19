@@ -85,7 +85,7 @@ export function musicControlsRow(channelId: string): ActionRowBuilder<ButtonBuil
     new ButtonBuilder()
       .setCustomId(musicControlId(channelId, "stop"))
       .setEmoji("⏹️")
-      .setLabel("Stop")
+      .setLabel("Arrêter")
       .setStyle(ButtonStyle.Danger),
   );
 }
@@ -95,7 +95,7 @@ export function audioControlsRow(channelId: string): ActionRowBuilder<ButtonBuil
     new ButtonBuilder()
       .setCustomId(musicControlId(channelId, "voteskip"))
       .setEmoji("🗳️")
-      .setLabel("Vote skip")
+      .setLabel("Voter pour passer")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(musicControlId(channelId, "seekback"))
@@ -110,12 +110,12 @@ export function audioControlsRow(channelId: string): ActionRowBuilder<ButtonBuil
     new ButtonBuilder()
       .setCustomId(musicControlId(channelId, "voldown"))
       .setEmoji("🔉")
-      .setLabel("-10")
+      .setLabel(`-${env.volumeStep}`)
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(musicControlId(channelId, "volup"))
       .setEmoji("🔊")
-      .setLabel("+10")
+      .setLabel(`+${env.volumeStep}`)
       .setStyle(ButtonStyle.Secondary),
   );
 }
