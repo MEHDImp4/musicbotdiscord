@@ -31,12 +31,25 @@ export interface SuggestionsProvider {
   suggest(query: string, limit?: number): Promise<Suggestion[]>;
 }
 
+const CACHE_TTL_MS = 5 * 60_000;
+const CACHE_MAX_ENTRIES = 200;
+
 export class YouTubeSuggestions implements SuggestionsProvider {
+  private readonly cache = new Map<string, { at: number; choices: Suggestion[] }>();
+
   constructor(private readonly timeoutMs = 800) {}
 
   async suggest(query: string, limit = 10): Promise<Suggestion[]> {
     const trimmed = query.trim();
     if (!trimmed) return [];
+
+    // Repeated keystrokes resolve to the same query; serve them from a short
+    // TTL cache instead of hitting the network every time.
+    const cacheKey = `${limit}:${trimmed.toLowerCase()}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+      return cached.choices;
+    }
 
     const url = `https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${encodeURIComponent(trimmed)}`;
 
@@ -46,10 +59,20 @@ export class YouTubeSuggestions implements SuggestionsProvider {
         maxBytes: 200_000,
         headers: { "User-Agent": "Mozilla/5.0" },
       });
-      return parseSuggestions(payload, limit);
+      const choices = parseSuggestions(payload, limit);
+      this.remember(cacheKey, choices);
+      return choices;
     } catch (error) {
       logger.debug({ err: error }, "Suggestion lookup failed");
       return [];
     }
+  }
+
+  private remember(key: string, choices: Suggestion[]): void {
+    this.cache.set(key, { at: Date.now(), choices });
+    if (this.cache.size <= CACHE_MAX_ENTRIES) return;
+
+    const oldest = this.cache.keys().next().value;
+    if (oldest !== undefined) this.cache.delete(oldest);
   }
 }

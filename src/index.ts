@@ -12,6 +12,7 @@ import { startNowPlayingUpdater } from "./services/nowPlaying";
 import { createShutdown } from "./shutdown";
 import { clearCooldowns, checkCooldown } from "./utils/cooldown";
 import { logger } from "./utils/logger";
+import { createThrottle } from "./utils/throttle";
 
 logger.info(
   { node: process.version, report: generateDependencyReport() },
@@ -26,6 +27,8 @@ const client = new Client({
 
 const players = new PlayerManager(createProviderRegistry(), client);
 const suggestions = new YouTubeSuggestions(env.suggestTimeoutMs);
+// Bound per-user outbound suggestion lookups; Discord sends one request per keystroke.
+const autocompleteThrottle = createThrottle(300);
 const commandContext: CommandContext = { players, commands };
 
 client.once(Events.ClientReady, (readyClient) => {
@@ -87,6 +90,11 @@ async function handleAutocomplete(interaction: import("discord.js").Autocomplete
   const focused = interaction.options.getFocused(true);
 
   if (!env.autocompleteEnabled || !["play", "playnext"].includes(interaction.commandName) || focused.name !== "query") {
+    await interaction.respond([]).catch(() => undefined);
+    return;
+  }
+
+  if (!autocompleteThrottle.allow(interaction.user.id)) {
     await interaction.respond([]).catch(() => undefined);
     return;
   }
