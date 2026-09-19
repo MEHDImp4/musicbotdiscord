@@ -1,3 +1,4 @@
+import { fetchJson } from "../utils/http";
 import { logger } from "../utils/logger";
 
 export interface Suggestion {
@@ -38,22 +39,17 @@ export class YouTubeSuggestions implements SuggestionsProvider {
     if (!trimmed) return [];
 
     const url = `https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${encodeURIComponent(trimmed)}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const response = await fetch(url, {
-        signal: controller.signal,
+      const payload = await fetchJson(url, {
+        timeoutMs: this.timeoutMs,
+        maxBytes: 200_000,
         headers: { "User-Agent": "Mozilla/5.0" },
       });
-      if (!response.ok) return [];
-      const payload = (await response.json()) as unknown;
       return parseSuggestions(payload, limit);
     } catch (error) {
-      logger.debug({ err: error, query: trimmed }, "Suggestion lookup failed");
+      logger.debug({ err: error }, "Suggestion lookup failed");
       return [];
-    } finally {
-      clearTimeout(timer);
     }
   }
 }

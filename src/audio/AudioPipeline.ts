@@ -7,6 +7,13 @@ import { logger } from "../utils/logger";
 import { buildFilterChain, type FilterPreset } from "./filters";
 import { percentToGain } from "./volume";
 
+const URL_PATTERN = /https?:\/\/\S+/gi;
+
+/** Stream URLs can carry tokens; never log them verbatim. */
+function redactUrls(text: string): string {
+  return text.replace(URL_PATTERN, "[url]");
+}
+
 export interface AudioPipelineResult {
   processes: ChildProcess[];
   resource: AudioResource<Track>;
@@ -41,6 +48,7 @@ export class AudioPipeline {
         "-reconnect", "1",
         "-reconnect_streamed", "1",
         "-reconnect_delay_max", "5",
+        "-rw_timeout", "15000000",
         "-i", source.url,
       );
     } else {
@@ -80,7 +88,7 @@ export class AudioPipeline {
     ffmpeg.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       ffmpegStderr = (ffmpegStderr + text).slice(-8000);
-      logger.debug({ track: track.title, ffmpeg: text.trim() }, "FFmpeg stderr");
+      logger.debug({ track: track.title, ffmpeg: redactUrls(text.trim()) }, "FFmpeg stderr");
     });
 
     ffmpeg.on("error", (error) => {
@@ -94,7 +102,7 @@ export class AudioPipeline {
             track: track.title,
             code,
             signal,
-            stderr: ffmpegStderr.trim(),
+            stderr: redactUrls(ffmpegStderr.trim()),
           },
           "FFmpeg exited with an error",
         );

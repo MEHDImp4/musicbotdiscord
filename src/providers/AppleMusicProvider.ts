@@ -1,5 +1,6 @@
 import type { RequestedBy, Track, TrackProvider } from "../music/Track";
 import { fetchJson } from "../utils/http";
+import { asString } from "../utils/strings";
 import { MetadataProvider } from "./MetadataProvider";
 
 interface ITunesLookup {
@@ -39,11 +40,12 @@ export class AppleMusicProvider extends MetadataProvider {
     if (!id) throw new Error("Lien Apple Music non reconnu (morceau attendu).");
 
     const payload = (await fetchJson(`https://itunes.apple.com/lookup?id=${id}`)) as ITunesLookup;
-    const result = payload.results?.[0];
-    const title = result?.trackName?.trim();
+    const result = Array.isArray(payload.results) ? payload.results[0] : undefined;
+    const title = asString(result?.trackName);
     if (!result || !title) throw new Error("Métadonnées Apple Music introuvables.");
 
-    const query = result.artistName ? `${result.artistName} ${title}` : title;
+    const artist = asString(result.artistName);
+    const query = artist ? `${artist} ${title}` : title;
     return this.searchOnYouTube(query, requestedBy);
   }
 }

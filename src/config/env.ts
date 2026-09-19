@@ -68,4 +68,8 @@ export const env = {
   lyricsEnabled: boolEnv("LYRICS_ENABLED", true),
   lyricsApiBase: process.env.LYRICS_API_BASE?.trim() || "https://lrclib.net",
   lyricsTimeoutMs: intEnv("LYRICS_TIMEOUT_MS", 8_000),
+  radioAllowedHosts: (process.env.RADIO_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean),
 } as const;

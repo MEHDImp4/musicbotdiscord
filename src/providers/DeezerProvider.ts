@@ -1,5 +1,6 @@
 import type { RequestedBy, Track, TrackProvider } from "../music/Track";
 import { fetchJson } from "../utils/http";
+import { asString } from "../utils/strings";
 import { MetadataProvider } from "./MetadataProvider";
 
 interface DeezerTrack {
@@ -39,10 +40,11 @@ export class DeezerProvider extends MetadataProvider {
     if (!id) throw new Error("Lien Deezer non reconnu (morceau attendu).");
 
     const payload = (await fetchJson(`https://api.deezer.com/track/${id}`)) as DeezerTrack;
-    const title = payload.title?.trim();
+    const title = asString(payload.title);
     if (!title) throw new Error("Métadonnées Deezer introuvables.");
 
-    const query = payload.artist?.name ? `${payload.artist.name} ${title}` : title;
+    const artist = asString(payload.artist?.name);
+    const query = artist ? `${artist} ${title}` : title;
     return this.searchOnYouTube(query, requestedBy);
   }
 }

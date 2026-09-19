@@ -45,7 +45,7 @@ export abstract class YtDlpProvider implements AudioProvider {
 
   async search(query: string, requestedBy: RequestedBy): Promise<Track> {
     const normalized = query.trim();
-    if (!normalized) throw new Error("Search query is empty");
+    if (!normalized) throw new Error("La recherche est vide.");
 
     const info = await this.fetchInfo(`${this.searchPrefix}1:${normalized}`);
     return this.toTrack(info, requestedBy);
@@ -53,7 +53,7 @@ export abstract class YtDlpProvider implements AudioProvider {
 
   async resolve(url: string, requestedBy: RequestedBy): Promise<Track> {
     if (!this.isAllowedUrl(url)) {
-      throw new Error(`URL not supported by ${this.name}`);
+      throw new Error(`URL non supportée par ${this.name}.`);
     }
     const info = await this.fetchInfo(url);
     return this.toTrack(info, requestedBy);
@@ -65,7 +65,7 @@ export abstract class YtDlpProvider implements AudioProvider {
     limit = env.playlistMaxItems,
   ): Promise<PlaylistResult> {
     if (!this.isAllowedUrl(url)) {
-      throw new Error(`URL not supported by ${this.name}`);
+      throw new Error(`URL non supportée par ${this.name}.`);
     }
 
     const capped = Math.max(1, Math.min(limit, env.playlistMaxItems));
@@ -74,6 +74,12 @@ export abstract class YtDlpProvider implements AudioProvider {
   }
 
   async createSource(track: Track): Promise<AudioSource> {
+    // Defense in depth: never feed yt-dlp a URL that this provider does not
+    // claim, even if a tampered persisted queue produced the track.
+    if (!this.isAllowedUrl(track.webpageUrl)) {
+      throw new Error(`URL non supportée par ${this.name}.`);
+    }
+
     const args = [
       ...this.streamArgs(),
       "-f",
@@ -130,7 +136,7 @@ export abstract class YtDlpProvider implements AudioProvider {
     const webpageUrl = this.resolveWebpageUrl(info);
 
     if (!id || !title || !webpageUrl) {
-      throw new Error("yt-dlp returned incomplete track metadata");
+      throw new Error("Métadonnées de piste incomplètes renvoyées par yt-dlp.");
     }
 
     return {
@@ -162,10 +168,10 @@ export abstract class YtDlpProvider implements AudioProvider {
 
     try {
       const line = stdout.split(/\r?\n/).map((item) => item.trim()).find(Boolean);
-      if (!line) throw new Error("Empty yt-dlp metadata response");
+      if (!line) throw new Error("Réponse de métadonnées yt-dlp vide.");
       return JSON.parse(line) as YtDlpInfo;
     } catch {
-      throw new Error("Unable to parse yt-dlp metadata");
+      throw new Error("Impossible d'analyser les métadonnées yt-dlp.");
     }
   }
 
@@ -185,14 +191,14 @@ export abstract class YtDlpProvider implements AudioProvider {
 
     try {
       const line = stdout.split(/\r?\n/).map((item) => item.trim()).find(Boolean);
-      if (!line) throw new Error("Empty yt-dlp playlist response");
+      if (!line) throw new Error("Réponse de playlist yt-dlp vide.");
       const parsed = JSON.parse(line) as YtDlpInfo;
       if (Array.isArray(parsed.entries)) {
         return { title: parsed.title, entries: parsed.entries };
       }
       return { title: parsed.title, entries: [parsed] };
     } catch {
-      throw new Error("Unable to parse yt-dlp playlist metadata");
+      throw new Error("Impossible d'analyser les métadonnées de playlist yt-dlp.");
     }
   }
 

@@ -8,6 +8,17 @@ import { renderProgressBar } from "./progress";
 
 export const QUEUE_PAGE_SIZE = 10;
 
+/** Discord.js throws on invalid embed URLs, so only forward well-formed links. */
+function safeRemoteUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function trackEmbed(title: string, track: Track, volumePercent?: number): EmbedBuilder {
   const fields = [
     { name: "Durée", value: formatDuration(track.duration), inline: true },
@@ -21,10 +32,12 @@ export function trackEmbed(title: string, track: Track, volumePercent?: number):
   const embed = new EmbedBuilder()
     .setTitle(title)
     .setDescription(`**${track.title}**${track.author ? `\n${track.author}` : ""}`)
-    .addFields(...fields)
-    .setURL(track.webpageUrl);
+    .addFields(...fields);
 
-  if (track.thumbnail) embed.setThumbnail(track.thumbnail);
+  const url = safeRemoteUrl(track.webpageUrl);
+  if (url) embed.setURL(url);
+  const thumbnail = safeRemoteUrl(track.thumbnail);
+  if (thumbnail) embed.setThumbnail(thumbnail);
   return embed;
 }
 
@@ -33,12 +46,12 @@ export function nowPlayingEmbed(player: GuildPlayer): EmbedBuilder {
   const embed = new EmbedBuilder();
 
   if (!track) {
-    return embed.setTitle("🎵 Now Playing").setDescription("Aucun morceau en cours.");
+    return embed.setTitle("🎵 Lecture en cours").setDescription("Aucun morceau en cours.");
   }
 
   const elapsed = player.playbackElapsedMs ?? 0;
   embed
-    .setTitle("🎵 Now Playing")
+    .setTitle("🎵 Lecture en cours")
     .setDescription(`**${track.title}**${track.author ? `\n${track.author}` : ""}`)
     .addFields(
       { name: "Progression", value: renderProgressBar(elapsed, track.duration) },
@@ -47,10 +60,12 @@ export function nowPlayingEmbed(player: GuildPlayer): EmbedBuilder {
       { name: "Autoplay", value: player.autoplay ? "Activé" : "Désactivé", inline: true },
       { name: "Filtre", value: FILTER_LABELS[player.filter], inline: true },
       { name: "Demandé par", value: track.requestedBy.username, inline: true },
-    )
-    .setURL(track.webpageUrl);
+    );
 
-  if (track.thumbnail) embed.setThumbnail(track.thumbnail);
+  const url = safeRemoteUrl(track.webpageUrl);
+  if (url) embed.setURL(url);
+  const thumbnail = safeRemoteUrl(track.thumbnail);
+  if (thumbnail) embed.setThumbnail(thumbnail);
   return embed;
 }
 

@@ -126,7 +126,7 @@ export class PlayerManager {
     try {
       const channel = await this.client.channels.fetch(channelId).catch(() => null);
       if (channel?.isTextBased() && !channel.isDMBased()) {
-        await channel.send(content);
+        await channel.send({ content, allowedMentions: { parse: [] } });
       }
     } catch (error) {
       logger.warn({ err: error, channelId }, "Failed to deliver notification");

@@ -20,6 +20,8 @@ logger.info(
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+  // Never ping users/roles/everyone from titles or user input echoed back.
+  allowedMentions: { parse: [] },
 });
 
 const players = new PlayerManager(createProviderRegistry(), client);
@@ -109,6 +111,18 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
 const stopNowPlayingUpdater = env.nowPlayingLive ? startNowPlayingUpdater(players) : () => undefined;
 
 const shutdown = createShutdown({ client, players, logger });
+
+process.on("uncaughtException", (error) => {
+  logger.fatal({ err: error }, "Uncaught exception");
+  stopNowPlayingUpdater();
+  clearCooldowns();
+  void shutdown("uncaughtException");
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error({ err: reason }, "Unhandled promise rejection");
+});
+
 process.once("SIGINT", () => {
   stopNowPlayingUpdater();
   clearCooldowns();

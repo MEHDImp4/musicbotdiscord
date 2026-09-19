@@ -1,7 +1,11 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { env } from "../config/env";
 import { logger } from "../utils/logger";
+import { parseHttpUrl } from "../utils/net";
 import { isTrackProvider, type RequestedBy, type Track } from "./Track";
+
+const MAX_PERSISTED_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export interface PersistedQueue {
   guildId: string;
@@ -21,6 +25,7 @@ function sanitizeTrack(value: unknown): Track | undefined {
   if (typeof track.id !== "string" || typeof track.title !== "string" || typeof track.webpageUrl !== "string") {
     return undefined;
   }
+  if (!parseHttpUrl(track.webpageUrl)) return undefined;
 
   const requestedBy = track.requestedBy as Partial<RequestedBy> | undefined;
   if (!requestedBy || typeof requestedBy.id !== "string" || typeof requestedBy.username !== "string") {
@@ -45,7 +50,10 @@ export function sanitizePersistedQueue(value: unknown): PersistedQueue | undefin
   if (typeof raw.guildId !== "string" || typeof raw.channelId !== "string") return undefined;
 
   const tracks = Array.isArray(raw.tracks)
-    ? raw.tracks.map(sanitizeTrack).filter((track): track is Track => track !== undefined)
+    ? raw.tracks
+        .slice(0, env.maxQueueSize)
+        .map(sanitizeTrack)
+        .filter((track): track is Track => track !== undefined)
     : [];
 
   return {
@@ -72,9 +80,11 @@ export class QueueStore {
       const raw = readFileSync(this.filePath, "utf8");
       const parsed = JSON.parse(raw) as Partial<PersistedFile>;
       const sessions = parsed.sessions ?? {};
+      const cutoff = Date.now() - MAX_PERSISTED_AGE_MS;
+      this.sessions.clear();
       for (const [sessionId, value] of Object.entries(sessions)) {
         const sanitized = sanitizePersistedQueue(value);
-        if (sanitized) this.sessions.set(sessionId, sanitized);
+        if (sanitized && sanitized.savedAt >= cutoff) this.sessions.set(sessionId, sanitized);
       }
       logger.info({ sessions: this.sessions.size, file: this.filePath }, "Persisted queues loaded");
     } catch (error) {
@@ -119,6 +129,11 @@ export class QueueStore {
       writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
       renameSync(tmp, this.filePath);
     } catch (error) {
+      try {
+        unlinkSync(`${this.filePath}.tmp`);
+      } catch {
+        // Nothing to clean up.
+      }
       logger.warn({ err: error, file: this.filePath }, "Failed to save persisted queues");
     }
   }

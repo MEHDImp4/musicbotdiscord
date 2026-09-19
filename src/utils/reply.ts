@@ -22,6 +22,6 @@ export function scheduleMessageDeletion(message: Message): void {
 
 /** Replies with a transient text message that is deleted after the configured delay. */
 export async function replyTemporary(interaction: ChatInputCommandInteraction, content: string): Promise<void> {
-  const message = await interaction.reply({ content, fetchReply: true });
+  const message = await interaction.reply({ content, fetchReply: true, allowedMentions: { parse: [] } });
   scheduleMessageDeletion(message);
 }

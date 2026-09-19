@@ -1,6 +1,7 @@
 import type { RequestedBy, Track, TrackProvider } from "../music/Track";
 import { fetchJson } from "../utils/http";
 import { logger } from "../utils/logger";
+import { asNumber, asString } from "../utils/strings";
 import { MetadataProvider } from "./MetadataProvider";
 
 interface SpotifyTokenResponse {
@@ -36,6 +37,7 @@ export function extractSpotifyTrackId(value: string): string | undefined {
 export class SpotifyProvider extends MetadataProvider {
   readonly name = "spotify" as TrackProvider;
   private token?: { value: string; expiresAt: number };
+  private tokenPromise?: Promise<string>;
 
   constructor(
     searcher: MetadataProvider["searcher"],
@@ -58,10 +60,15 @@ export class SpotifyProvider extends MetadataProvider {
       headers: { Authorization: `Bearer ${token}` },
     })) as SpotifyTrack;
 
-    const title = payload.name?.trim();
+    const title = asString(payload.name);
     if (!title) throw new Error("Métadonnées Spotify introuvables.");
 
-    const artists = (payload.artists ?? []).map((artist) => artist.name).filter(Boolean).join(" ");
+    const artists = Array.isArray(payload.artists)
+      ? payload.artists
+          .map((artist) => asString(artist?.name))
+          .filter((name): name is string => name !== undefined)
+          .join(" ")
+      : "";
     return this.searchOnYouTube(artists ? `${artists} ${title}` : title, requestedBy);
   }
 
@@ -70,6 +77,14 @@ export class SpotifyProvider extends MetadataProvider {
       return this.token.value;
     }
 
+    // Memoize the in-flight refresh so concurrent calls share one token request.
+    this.tokenPromise ??= this.refreshToken().finally(() => {
+      this.tokenPromise = undefined;
+    });
+    return this.tokenPromise;
+  }
+
+  private async refreshToken(): Promise<string> {
     const basic = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
     const payload = (await fetchJson("https://accounts.spotify.com/api/token", {
       method: "POST",
@@ -80,11 +95,15 @@ export class SpotifyProvider extends MetadataProvider {
       body: "grant_type=client_credentials",
     })) as SpotifyTokenResponse;
 
-    if (!payload.access_token) throw new Error("Authentification Spotify échouée.");
+    const accessToken = asString(payload.access_token);
+    if (!accessToken) throw new Error("Authentification Spotify échouée.");
+
+    const expiresIn = asNumber(payload.expires_in);
+    const ttlSeconds = expiresIn !== undefined && expiresIn > 0 ? Math.min(expiresIn, 86_400) : 3600;
 
     this.token = {
-      value: payload.access_token,
-      expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+      value: accessToken,
+      expiresAt: Date.now() + ttlSeconds * 1000,
     };
     logger.debug("Refreshed Spotify access token");
     return this.token.value;

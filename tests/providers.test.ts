@@ -45,7 +45,7 @@ const requestedBy: RequestedBy = { id: "u1", username: "Tester" };
 function makeRegistry() {
   const youtube = new FakeProvider("youtube", "youtube.com");
   const soundcloud = new FakeProvider("soundcloud", "soundcloud.com");
-  const radio = new RadioProvider();
+  const radio = new RadioProvider(async () => [{ address: "1.2.3.4" }], []);
   const registry = new ProviderRegistry({
     providers: [youtube, soundcloud],
     fallback: youtube,

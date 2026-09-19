@@ -1,4 +1,6 @@
+import { env } from "../config/env";
 import type { RequestedBy, Track, TrackProvider } from "../music/Track";
+import { assertSafeRemoteUrl, isSafeRemoteUrl, lookupHost, type HostResolver } from "../utils/net";
 import type { AudioProvider, AudioSource } from "./AudioProvider";
 
 export function deriveRadioTitle(url: string): string {
@@ -14,13 +16,20 @@ export function deriveRadioTitle(url: string): string {
 
 /**
  * Plays direct HTTP(S) audio streams (Icecast/radio). Used as a fallback for
- * any http URL not claimed by a more specific provider.
+ * any http URL not claimed by a more specific provider. Public hosts only:
+ * internal/loopback targets are refused to prevent SSRF. An optional
+ * `RADIO_ALLOWED_HOSTS` allowlist can further lock playback down.
  */
 export class RadioProvider implements AudioProvider {
   readonly name = "radio" as TrackProvider;
 
+  constructor(
+    private readonly resolveHost: HostResolver = lookupHost,
+    private readonly allowedHosts: readonly string[] = env.radioAllowedHosts,
+  ) {}
+
   supports(url: string): boolean {
-    return /^https?:\/\//i.test(url);
+    return isSafeRemoteUrl(url, this.allowedHosts);
   }
 
   async search(): Promise<Track> {
@@ -39,6 +48,10 @@ export class RadioProvider implements AudioProvider {
   }
 
   async createSource(track: Track): Promise<AudioSource> {
+    await assertSafeRemoteUrl(track.webpageUrl, {
+      allowedHosts: this.allowedHosts,
+      resolveHost: this.resolveHost,
+    });
     return { kind: "url", url: track.webpageUrl };
   }
 }
