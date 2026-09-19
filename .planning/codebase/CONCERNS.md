@@ -210,13 +210,13 @@ Resolved since this audit (v2 + hardening pass):
 - **`playNextInternal` recursion** → replaced with a bounded loop.
 - **No `--` before yt-dlp targets** → option parsing is now terminated before the query/URL.
 - **No autocomplete rate limit** → per-user throttle (`src/utils/throttle.ts`) + 5-minute suggestion cache.
+- **No startup validation of external tools** → `verifyExternalTools()` probes `yt-dlp`/`ffmpeg` at boot and logs availability.
 - **New:** SSRF guard for direct HTTP(S) playback (`src/utils/net.ts`) incl. IPv6 mapped/NAT64/6to4 handling; bounded HTTP bodies (`src/utils/http.ts`).
 
 Still open / to watch:
 
 - `@discordjs/voice` pinned to a `1.0.0-dev` snapshot (documented in `SECURITY.md`).
 - `tar` override must be re-checked on each `@discordjs/opus` bump (the upstream pin remains `tar@^6`).
-- No startup validation that `yt-dlp`/`ffmpeg` are on `PATH` (still detected on first play only).
 
 ---
 
