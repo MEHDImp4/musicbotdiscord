@@ -29,7 +29,7 @@ Do **not** paste your Discord token, cookies, or `.env` contents in an issue, PR
 
 Dependencies are reviewed weekly via Dependabot and `npm audit`.
 
-- **`tar` (critical/high) via `@discordjs/opus` → `@discordjs/node-pre-gyp`**: no upstream fix is available. The affected chain is only used at install time to download prebuilt native binaries, not at runtime. CI installs from the committed lockfile; treat install-time network/registry access as trusted.
+- **`tar` via `@discordjs/opus` → `@discordjs/node-pre-gyp`**: `node-pre-gyp` still pins `tar@^6`, so a package-level `overrides` entry forces the patched `tar@^7.5.22`. The chain is only used at install time to extract prebuilt native binaries, not at runtime. Re-check the override on any `@discordjs/opus` bump.
 - **`@discordjs/voice`** is intentionally pinned to a `1.0.0-dev` snapshot (Dependabot ignores it). Re-evaluate on every manual bump, as pre-release builds can change without notice.
 
 ### Scope
@@ -68,7 +68,7 @@ Nous visons une réponse sous quelques jours. Le crédit sera donné, sauf si tu
 
 Les dépendances sont surveillées chaque semaine par Dependabot et `npm audit`.
 
-- **`tar` (critique/high) via `@discordjs/opus` → `@discordjs/node-pre-gyp`** : aucun correctif amont n'est disponible. Cette chaîne ne sert qu'à l'installation (téléchargement de binaires natifs préconstruits), jamais à l'exécution. La CI installe depuis le lockfile committé ; considère l'accès réseau/registre à l'installation comme de confiance.
+- **`tar` via `@discordjs/opus` → `@discordjs/node-pre-gyp`** : `node-pre-gyp` épingle encore `tar@^6`, donc une entrée `overrides` force le `tar@^7.5.22` corrigé. Cette chaîne ne sert qu'à l'installation (extraction des binaires natifs préconstruits), jamais à l'exécution. À revérifier à chaque montée de `@discordjs/opus`.
 - **`@discordjs/voice`** est volontairement épinglé à un snapshot `1.0.0-dev` (ignoré par Dependabot). À réévaluer à chaque montée de version manuelle, un build pré-release pouvant changer sans préavis.
 
 ### Périmètre

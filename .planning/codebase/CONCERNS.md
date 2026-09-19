@@ -206,12 +206,13 @@ Resolved since this audit (v2 + hardening pass):
 - **Docker `--break-system-packages`** → yt-dlp now lives in an isolated venv (`/opt/ytdlp`) owned by the `node` user; container runs as non-root.
 - **`bot.err` not ignored** → `.gitignore` covers `*.err`.
 - **`tests/` not type-checked** → `npm run typecheck` now checks `src` + `tests` (`tsconfig.test.json`) and runs in CI.
+- **`tar` advisories (12 Dependabot alerts)** → `overrides: { tar: "^7.5.22" }` forces the patched transitive version (install-time only); documented in `SECURITY.md`.
 - **New:** SSRF guard for direct HTTP(S) playback (`src/utils/net.ts`) incl. IPv6 mapped/NAT64/6to4 handling; bounded HTTP bodies (`src/utils/http.ts`).
 
 Still open / to watch:
 
 - `@discordjs/voice` pinned to a `1.0.0-dev` snapshot (documented in `SECURITY.md`).
-- `tar` advisory via `@discordjs/opus` (install-time only, no upstream fix).
+- `tar` override must be re-checked on each `@discordjs/opus` bump (the upstream pin remains `tar@^6`).
 - `playNextInternal` remains recursive on consecutive track failures (bounded by `MAX_QUEUE_SIZE`).
 
 ---
