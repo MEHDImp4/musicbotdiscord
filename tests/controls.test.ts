@@ -30,7 +30,9 @@ describe("music control custom ids", () => {
 
   it("routes every button of a row to the same channel", () => {
     const row = musicControlsRow("987654321");
-    const ids = row.components.map((component) => component.data.custom_id);
+    const ids = row.components.map((component) =>
+      "custom_id" in component.data ? component.data.custom_id : undefined,
+    );
 
     expect(ids).toHaveLength(4);
     for (const id of ids) {

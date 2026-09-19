@@ -1,17 +1,23 @@
 import { describe, expect, it } from "vitest";
 import type { RequestedBy, Track } from "../src/music/Track";
-import type { AudioProvider } from "../src/providers/AudioProvider";
+import type { AudioProvider, AudioSource } from "../src/providers/AudioProvider";
 import { PlayerManager } from "../src/music/PlayerManager";
 
 class StubProvider implements AudioProvider {
+  readonly name = "youtube" as const;
+
+  supports(): boolean {
+    return false;
+  }
+
   async search(query: string, requestedBy: RequestedBy): Promise<Track> {
     return { id: query, title: query, webpageUrl: "https://youtube.com/watch?v=test", requestedBy, provider: "youtube" };
   }
   async resolve(url: string, requestedBy: RequestedBy): Promise<Track> {
     return { id: "url", title: "URL", webpageUrl: url, requestedBy, provider: "youtube" };
   }
-  async getStreamUrl(): Promise<string> {
-    return "https://example.invalid/audio";
+  async createSource(): Promise<AudioSource> {
+    return { kind: "url", url: "https://example.invalid/audio" };
   }
 }
 
@@ -40,7 +46,7 @@ describe("PlayerManager", () => {
     expect(manager.get("guild-b", "chan-1")?.guildId).toBe("guild-b");
   });
 
-  it("lists every session of a guild", () => {
+  it("lists the sessions of a guild (internal map; only one is ever connected)", () => {
     const manager = new PlayerManager(new StubProvider());
     manager.getOrCreate("guild-a", "chan-1");
     manager.getOrCreate("guild-a", "chan-2");
