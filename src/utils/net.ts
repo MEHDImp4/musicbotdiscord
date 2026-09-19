@@ -27,15 +27,99 @@ function isPrivateIpv4(address: string): boolean {
   return false;
 }
 
-function isPrivateIpv6(address: string): boolean {
-  const normalized = address.toLowerCase().split("%")[0];
-  if (normalized === "::" || normalized === "::1") return true;
-  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
-  if (/^fe[89ab]/.test(normalized)) return true;
-  if (normalized.startsWith("ff")) return true;
+const EMBEDDED_IPV4 = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
 
-  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateIpv4(mapped[1]);
+function parseHextet(group: string): number {
+  return /^[0-9a-f]{1,4}$/.test(group) ? Number.parseInt(group, 16) : -1;
+}
+
+/**
+ * Expands an IPv6 literal into its 16 bytes, supporting `::` compression,
+ * embedded dotted IPv4 and zone ids (`%eth0`). Returns undefined when the
+ * literal cannot be parsed.
+ */
+function parseIpv6ToBytes(address: string): number[] | undefined {
+  let value = address.toLowerCase().split("%")[0];
+  if (!value) return undefined;
+
+  const embedded = value.match(EMBEDDED_IPV4);
+  if (embedded) {
+    const octets = embedded[1].split(".").map((part) => Number.parseInt(part, 10));
+    if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+      return undefined;
+    }
+    const [a, b, c, d] = octets;
+    const high = ((a << 8) | b).toString(16);
+    const low = ((c << 8) | d).toString(16);
+    value = `${value.slice(0, value.length - embedded[1].length)}${high}:${low}`;
+  }
+
+  const compression = value.indexOf("::");
+  if (compression !== -1 && value.slice(compression + 2).includes("::")) return undefined;
+
+  const headGroups =
+    compression === -1
+      ? value.split(":").filter(Boolean)
+      : value.slice(0, compression).split(":").filter(Boolean);
+  const tailGroups =
+    compression === -1 ? [] : value.slice(compression + 2).split(":").filter(Boolean);
+
+  let groups: number[];
+  if (compression === -1) {
+    if (headGroups.length !== 8) return undefined;
+    groups = headGroups.map(parseHextet);
+  } else {
+    if (headGroups.length + tailGroups.length >= 8) return undefined;
+    const missing = 8 - headGroups.length - tailGroups.length;
+    groups = [
+      ...headGroups.map(parseHextet),
+      ...new Array<number>(missing).fill(0),
+      ...tailGroups.map(parseHextet),
+    ];
+  }
+
+  if (groups.some((group) => group < 0)) return undefined;
+
+  const bytes: number[] = [];
+  for (const group of groups) bytes.push((group >> 8) & 0xff, group & 0xff);
+  return bytes;
+}
+
+function isPrivateIpv6(address: string): boolean {
+  const bytes = parseIpv6ToBytes(address);
+  // Unparsable input must fail closed.
+  if (!bytes) return true;
+
+  const embeddedIpv4 = (offset: number): boolean =>
+    isPrivateIpv4(bytes.slice(offset, offset + 4).join("."));
+
+  // Unspecified (::) and loopback (::1).
+  if (bytes.every((byte) => byte === 0)) return true;
+
+  // IPv4-compatible (::x.x.x.x) and IPv4-mapped (::ffff:x.x.x.x), including the
+  // hex-encoded forms (::ffff:7f00:1) that a naive dotted-only check misses.
+  if (bytes.slice(0, 12).every((byte) => byte === 0)) return embeddedIpv4(12);
+  if (bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff) {
+    return embeddedIpv4(12);
+  }
+
+  // NAT64 well-known prefix 64:ff9b::/96 (and local-use 64:ff9b:1::/48).
+  if (bytes[0] === 0x00 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b) {
+    return bytes.slice(4, 12).every((byte) => byte === 0) ? embeddedIpv4(12) : true;
+  }
+
+  // 6to4 tunnels embed the IPv4 address in bytes 2..5.
+  if (bytes[0] === 0x20 && bytes[1] === 0x02) return embeddedIpv4(2);
+
+  // Unique local fc00::/7.
+  if ((bytes[0] & 0xfe) === 0xfc) return true;
+  // Link-local fe80::/10.
+  if (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80) return true;
+  // Site-local fec0::/10 (deprecated, still internal).
+  if (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0xc0) return true;
+  // Multicast ff00::/8.
+  if (bytes[0] === 0xff) return true;
+
   return false;
 }
 

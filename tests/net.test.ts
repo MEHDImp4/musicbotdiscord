@@ -18,7 +18,12 @@ describe("isBlockedIp", () => {
       "fc00::1",
       "fd12::1",
       "fe80::1",
+      "fec0::1",
       "::ffff:127.0.0.1",
+      "::ffff:7f00:1",
+      "::ffff:a9fe:a9fe",
+      "64:ff9b::7f00:1",
+      "2002:7f00:1::",
       "not-an-ip",
     ];
     for (const address of blocked) {
@@ -27,7 +32,15 @@ describe("isBlockedIp", () => {
   });
 
   it("allows public addresses", () => {
-    for (const address of ["1.1.1.1", "8.8.8.8", "203.0.114.1", "2606:4700:4700::1111"]) {
+    for (const address of [
+      "1.1.1.1",
+      "8.8.8.8",
+      "203.0.114.1",
+      "2606:4700:4700::1111",
+      "2001:4860:4860::8888",
+      "64:ff9b::8.8.8.8",
+      "::ffff:8.8.8.8",
+    ]) {
       expect(isBlockedIp(address), address).toBe(false);
     }
   });
@@ -62,6 +75,14 @@ describe("assertSafeRemoteUrl", () => {
     await expect(
       assertSafeRemoteUrl("https://evil.example.com/x", {
         resolveHost: async () => [{ address: "10.0.0.5" }],
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a hostname resolving to a hex-encoded mapped loopback address", async () => {
+    await expect(
+      assertSafeRemoteUrl("https://evil.example.com/x", {
+        resolveHost: async () => [{ address: "::ffff:7f00:1" }],
       }),
     ).rejects.toThrow();
   });
