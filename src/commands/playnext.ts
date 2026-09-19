@@ -1,5 +1,5 @@
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
-import { canJoinAndSpeak, memberVoiceChannel } from "./helpers";
+import { canJoinAndSpeak, ensureNoOtherGuildSession, memberVoiceChannel } from "./helpers";
 import type { CommandDefinition } from "./types";
 
 export const playnext: CommandDefinition = {
@@ -31,6 +31,8 @@ export const playnext: CommandDefinition = {
       await interaction.reply({ content: "❌ Je n'ai pas la permission de rejoindre ou parler dans ce salon.", flags: MessageFlags.Ephemeral });
       return;
     }
+
+    if (!(await ensureNoOtherGuildSession(interaction, players, channel.id))) return;
 
     await interaction.deferReply();
     const query = interaction.options.getString("query", true);

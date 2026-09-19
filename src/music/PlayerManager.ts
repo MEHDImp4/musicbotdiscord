@@ -7,7 +7,7 @@ import { logger } from "../utils/logger";
 import { GuildPlayer } from "./GuildPlayer";
 import { GuildSettingsStore, type GuildSettings } from "./GuildSettingsStore";
 import { QueueStore } from "./QueueStore";
-import { toSessionId } from "./session";
+import { findConflictingSession, toSessionId } from "./session";
 import type { RequestedBy, Track } from "./Track";
 
 export class PlayerManager {
@@ -33,12 +33,24 @@ export class PlayerManager {
     return this.players.get(toSessionId(guildId, channelId));
   }
 
-  /** Returns every player of a guild (one per active voice channel). */
+  /**
+   * Returns every player of a guild. Discord allows a single voice channel per
+   * guild per bot, so at most one of them is connected at a time.
+   */
   getForGuild(guildId: string): GuildPlayer[] {
     const prefix = `${guildId}:`;
     return [...this.players.entries()]
       .filter(([sessionId]) => sessionId.startsWith(prefix))
       .map(([, player]) => player);
+  }
+
+  /**
+   * Returns the guild's active session when it sits in another voice channel.
+   * Used to refuse a second session instead of silently hijacking the
+   * existing voice connection.
+   */
+  findGuildConflict(guildId: string, channelId: string): GuildPlayer | undefined {
+    return findConflictingSession(this.getForGuild(guildId), channelId);
   }
 
   /** Returns the player currently attached to a voice channel, across guilds. */

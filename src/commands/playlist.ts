@@ -1,6 +1,6 @@
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import { env } from "../config/env";
-import { canJoinAndSpeak, memberVoiceChannel } from "./helpers";
+import { canJoinAndSpeak, ensureNoOtherGuildSession, memberVoiceChannel } from "./helpers";
 import { importPlaylist } from "./playlistImport";
 import type { CommandDefinition } from "./types";
 
@@ -40,6 +40,8 @@ export const playlist: CommandDefinition = {
       await interaction.reply({ content: "❌ Je n'ai pas la permission de rejoindre ou parler dans ce salon.", flags: MessageFlags.Ephemeral });
       return;
     }
+
+    if (!(await ensureNoOtherGuildSession(interaction, players, channel.id))) return;
 
     const url = interaction.options.getString("url", true);
     const limit = interaction.options.getInteger("limit") ?? env.playlistMaxItems;

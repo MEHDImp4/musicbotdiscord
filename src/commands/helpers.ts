@@ -50,6 +50,29 @@ export async function requireControlChannel(
   return { player, channel };
 }
 
+/**
+ * Refuses to open a second voice session in a guild where the bot is already
+ * connected elsewhere: Discord allows only one voice channel per guild per bot,
+ * so a second join would silently hijack the existing connection. Replies
+ * itself (ephemeral) on conflict and returns false.
+ */
+export async function ensureNoOtherGuildSession(
+  interaction: ChatInputCommandInteraction,
+  players: PlayerManager,
+  channelId: string,
+): Promise<boolean> {
+  if (!interaction.guildId) return true;
+
+  const conflict = players.findGuildConflict(interaction.guildId, channelId);
+  if (!conflict) return true;
+
+  await interaction.reply({
+    content: `❌ Je suis déjà connecté dans <#${conflict.channelId}> sur ce serveur. Utilise \`/leave\` là-bas avant de lancer une autre session.`,
+    flags: MessageFlags.Ephemeral,
+  });
+  return false;
+}
+
 export type ReadPlayerResult =
   | { status: "ok"; player: GuildPlayer }
   | { status: "notGuild" }
