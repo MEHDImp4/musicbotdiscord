@@ -11,6 +11,7 @@ import { YouTubeSuggestions } from "./services/suggestions";
 import { startNowPlayingUpdater } from "./services/nowPlaying";
 import { createShutdown } from "./shutdown";
 import { clearCooldowns, checkCooldown } from "./utils/cooldown";
+import { verifyExternalTools } from "./utils/externalTools";
 import { logger } from "./utils/logger";
 import { createThrottle } from "./utils/throttle";
 
@@ -30,6 +31,8 @@ const suggestions = new YouTubeSuggestions(env.suggestTimeoutMs);
 // Bound per-user outbound suggestion lookups; Discord sends one request per keystroke.
 const autocompleteThrottle = createThrottle(300);
 const commandContext: CommandContext = { players, commands };
+
+void verifyExternalTools();
 
 client.once(Events.ClientReady, (readyClient) => {
   logger.info({ user: readyClient.user.tag, guilds: readyClient.guilds.cache.size }, "Discord client ready");
