@@ -267,8 +267,12 @@ export class GuildPlayer {
       if (channel.id !== this.channelId) {
         throw new Error("Voice channel mismatch for this player session");
       }
-      if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-        return;
+      if (this.connection) {
+        if (this.connection.state.status === VoiceConnectionStatus.Ready) return;
+        // Tear down a stale connection (Disconnected, Connecting…) so a fresh
+        // one is established instead of returning a dead session.
+        this.connection.destroy();
+        this.connection = undefined;
       }
 
       this._state = "CONNECTING";
@@ -296,6 +300,27 @@ export class GuildPlayer {
           },
           "Voice connection state changed",
         );
+      });
+
+      this.connection.on(VoiceConnectionStatus.Disconnected, () => {
+        void this.runExclusive(async () => {
+          const connection = this.connection;
+          if (!connection || this.destroyed) return;
+          try {
+            await Promise.race([
+              entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+              entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+            ]);
+            // The library is reconnecting to the channel on its own.
+          } catch {
+            logger.warn({ guild: this.guildId }, "Voice connection lost; next command will reconnect");
+            if (this.connection === connection) {
+              connection.destroy();
+              this.connection = undefined;
+              this._state = "IDLE";
+            }
+          }
+        });
       });
 
       const subscription = this.connection.subscribe(this.audioPlayer);
