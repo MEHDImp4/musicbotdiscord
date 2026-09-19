@@ -43,7 +43,12 @@ export const playnext: CommandDefinition = {
 
       const player = players.getOrCreate(interaction.guildId, channel.id);
       if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
-      await player.connect(channel);
+      try {
+        await player.connect(channel);
+      } catch (error) {
+        await players.destroy(interaction.guildId, channel.id);
+        throw error;
+      }
       const result = await player.playNext(track);
 
       await interaction.editReply(

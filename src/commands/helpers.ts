@@ -50,36 +50,39 @@ export async function requireControlChannel(
   return { player, channel };
 }
 
+export type ReadPlayerResult =
+  | { status: "ok"; player: GuildPlayer }
+  | { status: "notGuild" }
+  | { status: "none" };
+
 /**
  * Resolves a player for read-only commands: the caller's channel first, then
- * the only active session of the guild.
+ * the only active session of the guild. Never replies itself so callers can
+ * send exactly one response.
  */
 export async function resolveReadPlayer(
   interaction: ChatInputCommandInteraction,
   players: PlayerManager,
-): Promise<GuildPlayer | null> {
-  if (!interaction.guildId) {
-    await interaction.reply({ content: "❌ Cette commande doit être utilisée dans un serveur.", flags: MessageFlags.Ephemeral });
-    return null;
-  }
+): Promise<ReadPlayerResult> {
+  if (!interaction.guildId) return { status: "notGuild" };
 
   const channel = await memberVoiceChannel(interaction);
   if (channel) {
     const player = players.get(interaction.guildId, channel.id);
-    if (player) {
+    if (player?.isConnected) {
       if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
-      return player;
+      return { status: "ok", player };
     }
   }
 
-  const guildPlayers = players.getForGuild(interaction.guildId);
+  const guildPlayers = players.getForGuild(interaction.guildId).filter((player) => player.isConnected);
   if (guildPlayers.length === 1) {
     const player = guildPlayers[0];
     if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
-    return player;
+    return { status: "ok", player };
   }
 
-  return null;
+  return { status: "none" };
 }
 
 export function canJoinAndSpeak(channel: VoiceBasedChannel, interaction: ChatInputCommandInteraction): boolean {

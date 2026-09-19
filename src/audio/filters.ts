@@ -66,11 +66,15 @@ export function buildFilterChain(
     parts.push(`afade=t=in:st=0:d=${FADE_SECONDS}`);
   }
 
+  // `-ss` is an output seek: the filter graph still sees the full timeline, so
+  // the fade-out must be anchored to the absolute end, not to the remaining time.
   if (totalDurationSeconds !== undefined && Number.isFinite(totalDurationSeconds)) {
     const remaining = totalDurationSeconds - Math.max(0, startSeconds);
     if (remaining > FADE_SECONDS * 2) {
-      const fadeOutStart = Number((remaining - FADE_SECONDS).toFixed(3));
-      parts.push(`afade=t=out:st=${fadeOutStart}:d=${FADE_SECONDS}`);
+      const fadeOutStart = Number((totalDurationSeconds - FADE_SECONDS).toFixed(3));
+      if (fadeOutStart > 0) {
+        parts.push(`afade=t=out:st=${fadeOutStart}:d=${FADE_SECONDS}`);
+      }
     }
   }
 

@@ -25,7 +25,12 @@ export async function importPlaylist(
 
     const player = players.getOrCreate(interaction.guildId, channel.id);
     if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
-    await player.connect(channel);
+    try {
+      await player.connect(channel);
+    } catch (error) {
+      await players.destroy(interaction.guildId, channel.id);
+      throw error;
+    }
 
     let added = 0;
     for (const track of result.tracks) {
@@ -39,7 +44,8 @@ export async function importPlaylist(
 
     const prefix = result.title ? `**${result.title}** — ` : "";
     const capped = result.tracks.length >= limit ? ` (limite : ${limit})` : "";
-    await interaction.editReply(`✅ ${prefix}${added} morceau(x) ajouté(s) à la file${capped}.`);
+    const partial = added < result.tracks.length ? " (certains morceaux n'ont pas pu être ajoutés)" : "";
+    await interaction.editReply(`✅ ${prefix}${added} morceau(x) ajouté(s) à la file${capped}${partial}.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erreur inconnue";
     await interaction.editReply(`❌ Impossible d'importer la playlist : ${message}`);

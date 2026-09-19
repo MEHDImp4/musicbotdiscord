@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { fetchJson } from "../utils/http";
+import { asString } from "../utils/strings";
 import { parseLrc, type LrcLine } from "./lrc";
 
 export interface LyricsQuery {
@@ -24,16 +25,20 @@ interface LrclibResponse {
   instrumental?: boolean;
 }
 
-function toResult(payload: LrclibResponse): LyricsResult | undefined {
-  const trackName = payload.trackName?.trim() || "Titre inconnu";
-  const artistName = payload.artistName?.trim() || "";
+function toResult(value: unknown): LyricsResult | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const payload = value as LrclibResponse;
 
-  if (payload.instrumental) {
+  const trackName = asString(payload.trackName) ?? "Titre inconnu";
+  const artistName = asString(payload.artistName) ?? "";
+
+  if (payload.instrumental === true) {
     return { trackName, artistName, plain: "(Instrumental)", source: "lrclib" };
   }
 
-  const plain = payload.plainLyrics?.trim() || undefined;
-  const synced = payload.syncedLyrics ? parseLrc(payload.syncedLyrics) : [];
+  const plain = asString(payload.plainLyrics);
+  const syncedLyrics = asString(payload.syncedLyrics);
+  const synced = syncedLyrics ? parseLrc(syncedLyrics) : [];
 
   if (!plain && synced.length === 0) return undefined;
 
@@ -88,7 +93,9 @@ export class LyricsService {
       )) as LrclibResponse[];
 
       if (!Array.isArray(payload)) return undefined;
-      const match = payload.find((item) => item.syncedLyrics || item.plainLyrics);
+      const match = payload.find(
+        (item) => typeof item === "object" && item !== null && (item.syncedLyrics || item.plainLyrics),
+      );
       return match ? toResult(match) : undefined;
     } catch {
       return undefined;

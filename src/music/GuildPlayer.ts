@@ -679,50 +679,47 @@ export class GuildPlayer {
   private async killProcesses(): Promise<void> {
     const processes = this.childProcesses;
     this.childProcesses = [];
+    if (processes.length === 0) return;
 
-    // Phase 1: Send SIGTERM to all processes
+    const hasExited = (proc: ChildProcess): boolean =>
+      proc.exitCode !== null || proc.signalCode !== null;
+
+    // Resolve as soon as a process really exits (not merely when kill() was called).
+    const exits = processes.map(
+      (proc) =>
+        new Promise<void>((resolve) => {
+          if (hasExited(proc)) {
+            resolve();
+            return;
+          }
+          proc.once("exit", () => resolve());
+          proc.once("close", () => resolve());
+          proc.once("error", () => resolve());
+        }),
+    );
+
+    // Phase 1: ask every live process to terminate.
     for (const proc of processes) {
-      if (!proc.killed) {
-        proc.kill("SIGTERM");
-      }
+      if (!hasExited(proc)) proc.kill("SIGTERM");
     }
 
-    // Phase 2: Wait up to 1 second for graceful exit, then SIGKILL
+    // Phase 2: wait up to 1 second for a graceful exit, then force-kill.
     const SIGTERM_GRACE_MS = 1_000;
-    await new Promise<void>((resolve) => {
-      let resolved = false;
-      const done = () => {
-        if (!resolved) {
-          resolved = true;
-          resolve();
-        }
-      };
+    const exitedInTime = await Promise.race([
+      Promise.all(exits).then(() => true),
+      new Promise<false>((resolve) => {
+        setTimeout(() => resolve(false), SIGTERM_GRACE_MS).unref();
+      }),
+    ]);
 
-      const killTimer = setTimeout(() => {
-        for (const proc of processes) {
-          if (!proc.killed) {
-            proc.kill("SIGKILL");
-            logger.warn({ pid: proc.pid }, "Force-killed process with SIGKILL after timeout");
-          }
-        }
-        done();
-      }, SIGTERM_GRACE_MS);
-
-      // If all processes exit before timeout, clear the timer
-      const checkAllExited = () => {
-        if (processes.every((p) => p.exitCode !== null || p.killed)) {
-          clearTimeout(killTimer);
-          done();
-        }
-      };
-
+    if (!exitedInTime) {
       for (const proc of processes) {
-        proc.on("exit", checkAllExited);
+        if (!hasExited(proc)) {
+          proc.kill("SIGKILL");
+          logger.warn({ pid: proc.pid }, "Force-killed process with SIGKILL after timeout");
+        }
       }
-
-      // Also check immediately in case processes are already dead
-      checkAllExited();
-    });
+    }
 
     logger.debug({ count: processes.length }, "All child processes terminated");
   }

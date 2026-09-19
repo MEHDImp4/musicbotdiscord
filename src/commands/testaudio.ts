@@ -29,7 +29,12 @@ export const testaudio: CommandDefinition = {
     try {
       const player = players.getOrCreate(interaction.guildId, channel.id);
       if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
-      await player.connect(channel);
+      try {
+        await player.connect(channel);
+      } catch (error) {
+        await players.destroy(interaction.guildId, channel.id);
+        throw error;
+      }
       await player.playDiagnosticTone();
       await interaction.editReply("🔊 Test audio lancé : tu dois entendre un bip de 440 Hz pendant 3 secondes.");
     } catch (error) {

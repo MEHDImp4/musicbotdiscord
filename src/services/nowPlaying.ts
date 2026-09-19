@@ -8,11 +8,15 @@ import { logger } from "../utils/logger";
 export async function refreshNowPlaying(player: GuildPlayer): Promise<void> {
   const message = player.nowPlayingMessage;
   if (!message || !player.currentTrack) return;
-  await message
-    .edit({ embeds: [nowPlayingEmbed(player)], components: playbackControlsRows(player.channelId) })
-    .catch((error) => {
-      logger.debug({ err: error, guild: player.guildId }, "Immediate now playing update failed");
-    });
+  try {
+    await message
+      .edit({ embeds: [nowPlayingEmbed(player)], components: playbackControlsRows(player.channelId) })
+      .catch((error) => {
+        logger.debug({ err: error, guild: player.guildId }, "Immediate now playing update failed");
+      });
+  } catch (error) {
+    logger.debug({ err: error, guild: player.guildId }, "Immediate now playing render failed");
+  }
 }
 
 /**
@@ -32,12 +36,21 @@ export function startNowPlayingUpdater(players: PlayerManager, intervalMs = 10_0
 
       if (player.state !== "PLAYING" && player.state !== "PAUSED") continue;
 
-      void message
-        .edit({ embeds: [nowPlayingEmbed(player)], components: playbackControlsRows(player.channelId) })
-        .catch((error) => {
+      // Building the embed synchronously can throw on invalid remote URLs; a
+      // throw here would otherwise escape the setInterval and crash the process.
+      try {
+        const payload = {
+          embeds: [nowPlayingEmbed(player)],
+          components: playbackControlsRows(player.channelId),
+        };
+        void message.edit(payload).catch((error) => {
           logger.debug({ err: error, guild: player.guildId }, "Now playing update failed");
           player.setNowPlayingMessage(undefined);
         });
+      } catch (error) {
+        logger.debug({ err: error, guild: player.guildId }, "Now playing render failed");
+        player.setNowPlayingMessage(undefined);
+      }
     }
   }, intervalMs);
 

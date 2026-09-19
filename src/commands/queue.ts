@@ -9,11 +9,17 @@ export const queue: CommandDefinition = {
   data: new SlashCommandBuilder().setName("queue").setDescription("Affiche la file d'attente"),
   usage: "/queue",
   async execute(interaction, { players }) {
-    const player = await resolveReadPlayer(interaction, players);
-    if (!player) {
-      await replyTemporary(interaction, "🎶 La file d'attente est vide.");
+    const result = await resolveReadPlayer(interaction, players);
+    if (result.status !== "ok") {
+      await replyTemporary(
+        interaction,
+        result.status === "notGuild"
+          ? "❌ Cette commande doit être utilisée dans un serveur."
+          : "🎶 La file d'attente est vide.",
+      );
       return;
     }
+    const player = result.player;
     const totalPages = queuePageCount(player);
     await interaction.reply({
       embeds: [queueEmbed(player, 0)],

@@ -86,8 +86,16 @@ export async function handleMusicControl(
       return true;
 
     case "voteskip": {
-      const voiceChannel = botVoiceChannel(interaction, parsed.channelId);
-      const humans = voiceChannel ? voiceChannel.members.filter((m) => !m.user.bot).size : 1;
+      let voiceChannel = botVoiceChannel(interaction, parsed.channelId);
+      if (!voiceChannel) {
+        const fetched = await interaction.guild.channels.fetch(parsed.channelId).catch(() => null);
+        if (fetched?.isVoiceBased()) voiceChannel = fetched;
+      }
+      if (!voiceChannel) {
+        await replyPrivate(interaction, "❌ Salon vocal introuvable pour compter les votes.");
+        return true;
+      }
+      const humans = voiceChannel.members.filter((m) => !m.user.bot).size;
       const threshold = computeSkipThreshold(humans, env.voteSkipMin, env.voteSkipRatio);
       const result = await player.voteSkip(interaction.user.id, threshold);
       await replyPrivate(

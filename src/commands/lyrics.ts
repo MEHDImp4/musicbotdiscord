@@ -36,10 +36,15 @@ export const lyrics: CommandDefinition = {
     let durationSeconds: number | undefined;
 
     if (!title) {
-      const player = await resolveReadPlayer(interaction, players);
-      const track = player?.currentTrack;
-      if (!track) {
-        await replyTemporary(interaction, "ℹ️ Aucun morceau en cours. Précise un titre : `/lyrics query:<…>`.");
+      const result = await resolveReadPlayer(interaction, players);
+      const track = result.status === "ok" ? result.player.currentTrack : undefined;
+      if (result.status !== "ok" || !track) {
+        await replyTemporary(
+          interaction,
+          result.status === "notGuild"
+            ? "❌ Cette commande doit être utilisée dans un serveur."
+            : "ℹ️ Aucun morceau en cours. Précise un titre : `/lyrics query:<…>`.",
+        );
         return;
       }
       title = track.title;

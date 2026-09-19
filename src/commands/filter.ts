@@ -37,7 +37,11 @@ export const filter: CommandDefinition = {
 
     if (context.player.currentTrack) {
       const positionSeconds = Math.floor((context.player.playbackElapsedMs ?? 0) / 1000);
-      await context.player.seek(positionSeconds);
+      const applied = await context.player.seek(positionSeconds);
+      if (!applied) {
+        await replyTemporary(interaction, "❌ Impossible d'appliquer le filtre pendant la lecture.");
+        return;
+      }
     }
 
     await refreshNowPlaying(context.player);

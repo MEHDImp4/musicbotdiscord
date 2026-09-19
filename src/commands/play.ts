@@ -52,7 +52,13 @@ export const play: CommandDefinition = {
 
       const player = players.getOrCreate(interaction.guildId, channel.id);
       if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
-      await player.connect(channel);
+      try {
+        await player.connect(channel);
+      } catch (error) {
+        // Drop the half-initialized session so it does not linger as a ghost.
+        await players.destroy(interaction.guildId, channel.id);
+        throw error;
+      }
       const result = await player.add(track);
 
       if (result.started) {
