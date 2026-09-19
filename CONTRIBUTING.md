@@ -20,8 +20,8 @@ npm run dev
 ### Before opening a PR
 
 ```bash
-npm run build   # TypeScript check
-npm test        # unit tests
+npm run typecheck   # TypeScript check (src + tests)
+npm test            # unit tests
 ```
 
 CI (build + tests) must pass before a PR can be merged.
@@ -68,8 +68,8 @@ npm run dev
 ### Avant de proposer une PR
 
 ```bash
-npm run build   # vérification TypeScript
-npm test        # tests unitaires
+npm run typecheck   # vérification TypeScript (src + tests)
+npm test            # tests unitaires
 ```
 
 La CI (build + tests) doit passer pour qu'une PR soit fusionnée.

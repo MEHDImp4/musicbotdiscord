@@ -10,13 +10,14 @@ Discord music bot (MVP) — TypeScript + Node.js 24+, discord.js 14, @discordjs/
 npm install              # install deps
 npm run dev              # dev mode (tsx watch, loads .env)
 npm run build            # tsc → dist/
+npm run typecheck        # tsc --noEmit for src AND tests
 npm start                # node dist/index.js (production)
 npm run deploy:commands  # register slash commands with Discord
 npm test                 # vitest run
 npm run test:watch       # vitest watch
 ```
 
-No lint, typecheck, or format scripts exist. `tsc` is the only static check (via `npm run build`).
+No lint or format scripts exist. `tsc` is the only static check: `npm run build` (src) and `npm run typecheck` (src + tests).
 
 ## Environment
 
