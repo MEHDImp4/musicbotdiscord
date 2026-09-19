@@ -22,7 +22,7 @@
 - 🔎 **Recherche YouTube** ou lecture directe par URL, avec **autocomplétion** sur `/play`
 - 🌐 **Multi-sources** : SoundCloud (flux réel), flux radio / URL directe, et liens **Spotify / Deezer / Apple Music** convertis en recherche YouTube
 - 📃 **File d'attente par serveur** (aucun mélange entre guildes) avec **pagination**
-- 🎧 **Multi-sessions** : plusieurs salons vocaux simultanés dans un même serveur, avec files et réglages indépendants
+- 🎧 **Une session vocale par serveur** : Discord n'autorise qu'un salon vocal par bot et par serveur ; plusieurs serveurs peuvent tourner en parallèle, avec files et réglages indépendants
 - 📚 **Playlists YouTube** : import par URL (`/playlist` ou `/play` avec un lien de playlist)
 - ♾️ **Autoplay** : enchaîne des titres similaires quand la file se vide (`/autoplay`)
 - 🎛️ **Filtres audio** : bassboost, nightcore, vaporwave, 8D, treble, normalisation (`/filter`)
@@ -149,7 +149,7 @@ Discord
   ↓
 discord.js (Client)
   ↓
-PlayerManager ──► GuildPlayer (1 par salon vocal) + QueueManager
+PlayerManager ──► GuildPlayer (1 par serveur) + QueueManager
                         ↓
                    AudioPipeline ──► AudioProvider
                         ↓                 ↓
@@ -160,7 +160,7 @@ PlayerManager ──► GuildPlayer (1 par salon vocal) + QueueManager
                   Discord Voice
 ```
 
-- `GuildPlayer` détient l'état d'une session (serveur + salon vocal) : file, mode boucle, volume, votes de skip, message now-playing — plusieurs sessions peuvent tourner en parallèle dans un même serveur.
+- `GuildPlayer` détient l'état d'une session (serveur + salon vocal) : file, mode boucle, volume, votes de skip, message now-playing. Discord n'autorisant qu'un salon vocal par bot et par serveur, une seule session est active par serveur ; plusieurs serveurs peuvent tourner en parallèle. Une seconde session dans un autre salon du même serveur est refusée avec un message explicite.
 - `decideNext()` (fonction pure) détermine le morceau suivant selon le mode boucle.
 - Les **URLs sont validées par fournisseur** (hôtes YouTube/SoundCloud/Spotify/Deezer/Apple reconnus, sinon flux direct) et le **flux est résolu juste avant lecture** (évite l'expiration pendant l'attente).
 - L'autocomplétion utilise un endpoint de suggestions rapide (jamais `yt-dlp`, trop lent pour la limite de 3 s de Discord).

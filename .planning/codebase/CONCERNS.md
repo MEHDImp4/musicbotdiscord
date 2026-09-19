@@ -211,6 +211,7 @@ Resolved since this audit (v2 + hardening pass):
 - **No `--` before yt-dlp targets** → option parsing is now terminated before the query/URL.
 - **No autocomplete rate limit** → per-user throttle (`src/utils/throttle.ts`) + 5-minute suggestion cache.
 - **No startup validation of external tools** → `verifyExternalTools()` probes `yt-dlp`/`ffmpeg` at boot and logs availability.
+- **False "multi-session per server" claim** → Discord allows one voice channel per guild per bot; documented in README/AGENTS and enforced by `findConflictingSession` + `ensureNoOtherGuildSession` (a second channel is refused). Multi-guild playback is unchanged.
 - **New:** SSRF guard for direct HTTP(S) playback (`src/utils/net.ts`) incl. IPv6 mapped/NAT64/6to4 handling; bounded HTTP bodies (`src/utils/http.ts`).
 
 Still open / to watch:

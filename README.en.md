@@ -22,7 +22,7 @@
 - 🔎 **YouTube search** or direct URL playback, with **autocomplete** on `/play`
 - 🌐 **Multi-source**: SoundCloud (real stream), radio / direct URLs, and **Spotify / Deezer / Apple Music** links resolved to a YouTube search
 - 📃 **Per-server queue** (no cross-guild mixing) with **pagination**
-- 🎧 **Multi-session**: several voice channels at once in the same server, with independent queues and settings
+- 🎧 **One voice session per server**: Discord allows a bot in only one voice channel per server; several servers can run in parallel, with independent queues and settings
 - 📚 **YouTube playlists**: import by URL (`/playlist` or `/play` with a playlist link)
 - ♾️ **Autoplay**: chains related tracks when the queue runs out (`/autoplay`)
 - 🎛️ **Audio filters**: bassboost, nightcore, vaporwave, 8D, treble, loudness normalization (`/filter`)
@@ -151,7 +151,7 @@ Discord
   ↓
 discord.js (Client)
   ↓
-PlayerManager ──► GuildPlayer (one per voice channel) + QueueManager
+PlayerManager ──► GuildPlayer (one per server) + QueueManager
                         ↓
                    AudioPipeline ──► AudioProvider
                         ↓                 ↓
@@ -162,7 +162,7 @@ PlayerManager ──► GuildPlayer (one per voice channel) + QueueManager
                   Discord Voice
 ```
 
-- `GuildPlayer` holds the state of one session (server + voice channel): queue, loop mode, volume, skip votes, now-playing message — several sessions can run in parallel within the same server.
+- `GuildPlayer` holds the state of one session (server + voice channel): queue, loop mode, volume, skip votes, now-playing message. Since Discord allows only one voice channel per server per bot, a single session is active per server; several servers run in parallel. A second session from another channel in the same server is refused with an explicit message.
 - `decideNext()` (a pure function) determines the next track according to the loop mode.
 - **YouTube URLs are validated** and the **direct stream is resolved just-in-time** (avoids expiry while queued).
 - Autocomplete uses a fast suggestions endpoint (never `yt-dlp`, too slow for Discord's 3 s limit).

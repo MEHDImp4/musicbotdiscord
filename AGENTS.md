@@ -35,7 +35,7 @@ Button handlers are in `src/interactions/` (`musicControls.ts` for playback/volu
 
 Key flow: `src/index.ts` → `PlayerManager` → `GuildPlayer` → `AudioPipeline`/`AudioProvider` → `YouTubeProvider` → yt-dlp/FFmpeg → @discordjs/voice.
 
-`GuildPlayer` owns per-guild state: queue, loop mode, volume, skip votes, and the live now-playing message. Auto-advance decides the next track via the pure `decideNext()` helper.
+`GuildPlayer` owns per-session state (guild + voice channel): queue, loop mode, volume, skip votes, and the live now-playing message. Auto-advance decides the next track via the pure `decideNext()` helper. Discord allows a bot in only one voice channel per guild, so a guild has at most one active session; commands refuse a second channel (`ensureNoOtherGuildSession`).
 
 URLs are validated to YouTube-only in `YouTubeProvider`. Direct audio streams are resolved just-in-time (not at queue time) to avoid expiry. `/play` autocomplete uses `src/services/suggestions.ts` (fast Google suggest endpoint, never yt-dlp which is too slow). Live progress is driven by `src/services/nowPlaying.ts`.
 
