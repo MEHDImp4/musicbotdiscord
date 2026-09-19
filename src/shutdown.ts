@@ -26,22 +26,21 @@ export function createShutdown({ client, players, logger }: ShutdownDeps) {
     }, HARD_TIMEOUT_MS);
 
     try {
-      // Persist any pending per-guild settings before tearing down.
+      // Persist any pending per-session settings/queues before tearing down.
       players.flushSettings();
+      players.flushQueues();
 
-      // Send disconnect messages to active guilds (PROC-01)
-      const activeGuildIds = players.activeGuildIds;
-      if (activeGuildIds.length > 0) {
+      // Send disconnect messages for every active playback session.
+      const activePlayers = players.activePlayers();
+      if (activePlayers.length > 0) {
         const sendResults = await Promise.allSettled(
-          activeGuildIds.map(async (guildId) => {
-            const guild = await client.guilds.fetch(guildId).catch(() => null);
+          activePlayers.map(async (player) => {
+            const guild = await client.guilds.fetch(player.guildId).catch(() => null);
             if (!guild) return;
 
-            // Find a text channel to send the message
-            const player = players.get(guildId);
             let channel: TextChannel | null = null;
 
-            if (player?.lastTextChannelId) {
+            if (player.lastTextChannelId) {
               const fetched = await guild.channels.fetch(player.lastTextChannelId).catch(() => null);
               if (fetched?.isTextBased() && !fetched.isDMBased()) {
                 channel = fetched as TextChannel;
@@ -54,13 +53,12 @@ export function createShutdown({ client, players, logger }: ShutdownDeps) {
 
             if (channel) {
               await channel.send(DISCONNECT_MESSAGE).catch((err) => {
-                logger.warn({ err, guild: guildId }, "Failed to send disconnect message");
+                logger.warn({ err, guild: player.guildId, channel: player.channelId }, "Failed to send disconnect message");
               });
             }
           }),
         );
 
-        // Log any failures
         for (const result of sendResults) {
           if (result.status === "rejected") {
             logger.warn({ err: result.reason }, "Failed to send disconnect message to guild");

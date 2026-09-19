@@ -6,7 +6,7 @@ import { handleMusicControl } from "./interactions/musicControls";
 import { handleQueuePagination } from "./interactions/queuePagination";
 import { env } from "./config/env";
 import { PlayerManager } from "./music/PlayerManager";
-import { YouTubeProvider } from "./providers/YouTubeProvider";
+import { createProviderRegistry } from "./providers";
 import { YouTubeSuggestions } from "./services/suggestions";
 import { startNowPlayingUpdater } from "./services/nowPlaying";
 import { createShutdown } from "./shutdown";
@@ -22,7 +22,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 });
 
-const players = new PlayerManager(new YouTubeProvider(), client);
+const players = new PlayerManager(createProviderRegistry(), client);
 const suggestions = new YouTubeSuggestions(env.suggestTimeoutMs);
 const commandContext: CommandContext = { players, commands };
 
@@ -58,9 +58,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const command = commandMap.get(interaction.commandName);
   if (!command) return;
-
-  const player = interaction.guildId ? players.get(interaction.guildId) : undefined;
-  if (player && interaction.channelId) player.lastTextChannelId = interaction.channelId;
 
   const cooldownMs = (command.cooldownSeconds ?? env.commandCooldownSeconds) * 1000;
   const remaining = checkCooldown(`${interaction.user.id}:${command.data.name}`, cooldownMs);
@@ -98,15 +95,15 @@ async function handleAutocomplete(interaction: import("discord.js").Autocomplete
 
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   const guild = newState.guild ?? oldState.guild;
-  const player = players.get(guild.id);
-  if (!player?.channelId) return;
 
-  const channel = guild.channels.cache.get(player.channelId);
-  if (!channel?.isVoiceBased()) return;
+  for (const player of players.getForGuild(guild.id)) {
+    const channel = guild.channels.cache.get(player.channelId);
+    if (!channel?.isVoiceBased()) continue;
 
-  const humanCount = channel.members.filter((member) => !member.user.bot).size;
-  if (humanCount === 0) player.handleHumansEmpty();
-  else player.handleHumansPresent();
+    const humanCount = channel.members.filter((member) => !member.user.bot).size;
+    if (humanCount === 0) player.handleHumansEmpty();
+    else player.handleHumansPresent();
+  }
 });
 
 const stopNowPlayingUpdater = env.nowPlayingLive ? startNowPlayingUpdater(players) : () => undefined;

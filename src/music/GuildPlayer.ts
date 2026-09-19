@@ -13,6 +13,7 @@ import {
 } from "@discordjs/voice";
 import type { Message, VoiceBasedChannel } from "discord.js";
 import { AudioPipeline } from "../audio/AudioPipeline";
+import type { FilterPreset } from "../audio/filters";
 import { percentToGain } from "../audio/volume";
 import { env } from "../config/env";
 import type { AudioProvider } from "../providers/AudioProvider";
@@ -20,6 +21,7 @@ import { logger } from "../utils/logger";
 import { DEFAULT_GUILD_SETTINGS, type GuildSettings } from "./GuildSettingsStore";
 import type { PlayerState } from "./PlayerState";
 import { QueueManager } from "./QueueManager";
+import { toSessionId } from "./session";
 import type { Track } from "./Track";
 
 export interface AddTrackResult {
@@ -75,20 +77,32 @@ export class GuildPlayer {
   private _lastTextChannelId?: string;
   private _volume = 100;
   private _loopMode: LoopMode = "off";
+  private _autoplay = false;
+  private _filter: FilterPreset = "off";
+  private _seekOffsetMs = 0;
+  private suppressNextIdle = false;
+  private autoplayCount = 0;
+  private readonly recentTrackIds = new Set<string>();
+  private readonly history: Track[] = [];
   private readonly skipVotes = new Set<string>();
   private _nowPlayingMessage?: Message;
 
   constructor(
     readonly guildId: string,
+    readonly channelId: string,
     provider: AudioProvider,
-    private readonly onDestroyed: (guildId: string) => void,
+    private readonly onDestroyed: (sessionId: string) => void,
     private readonly onNotify?: NotifyFn,
     initialSettings: GuildSettings = DEFAULT_GUILD_SETTINGS,
     private readonly onSettingsChange?: (patch: Partial<GuildSettings>) => void,
+    private readonly onQueueChange?: (player: GuildPlayer) => void,
+    private readonly onAutoplay?: (seed: Track, exclude: ReadonlySet<string>) => Promise<Track | undefined>,
   ) {
     this.pipeline = new AudioPipeline(provider);
     this._volume = initialSettings.volume;
     this._loopMode = initialSettings.loopMode;
+    this._autoplay = initialSettings.autoplay;
+    this._filter = initialSettings.filter;
 
     this.audioPlayer.on(AudioPlayerStatus.Playing, () => {
       this._state = "PLAYING";
@@ -109,12 +123,17 @@ export class GuildPlayer {
     this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
       void this.runExclusive(async () => {
         if (this.destroyed) return;
+        if (this.suppressNextIdle) {
+          this.suppressNextIdle = false;
+          return;
+        }
         logger.info({ guild: this.guildId }, "Audio player entered IDLE");
         const finished = this._currentTrack;
         await this.killProcesses();
         this.currentResource = undefined;
         this._currentTrack = undefined;
         this.skipVotes.clear();
+        if (finished) this.pushHistory(finished);
         const loopBack = this.bypassLoop ? undefined : finished;
         this.bypassLoop = false;
         await this.playNextInternal(loopBack);
@@ -143,8 +162,8 @@ export class GuildPlayer {
     return this._state;
   }
 
-  get channelId(): string | undefined {
-    return this.connection?.joinConfig.channelId || undefined;
+  get sessionId(): string {
+    return toSessionId(this.guildId, this.channelId);
   }
 
   get queueSize(): number {
@@ -153,6 +172,17 @@ export class GuildPlayer {
 
   get isConnected(): boolean {
     return Boolean(this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed);
+  }
+
+  /** Voice websocket/udp latency, or undefined when not connected. */
+  get voicePing(): { ws?: number; udp?: number } | undefined {
+    if (!this.connection) return undefined;
+    return { ws: this.connection.ping.ws, udp: this.connection.ping.udp };
+  }
+
+  /** Number of live child processes (yt-dlp + FFmpeg) for this session. */
+  get childProcessCount(): number {
+    return this.childProcesses.length;
   }
 
   get lastTextChannelId(): string | undefined {
@@ -184,12 +214,40 @@ export class GuildPlayer {
     this.onSettingsChange?.({ loopMode: mode });
   }
 
+  get autoplay(): boolean {
+    return this._autoplay;
+  }
+
+  set autoplay(value: boolean) {
+    this._autoplay = value;
+    this.onSettingsChange?.({ autoplay: value });
+  }
+
+  get filter(): FilterPreset {
+    return this._filter;
+  }
+
+  set filter(preset: FilterPreset) {
+    this._filter = preset;
+    this.onSettingsChange?.({ filter: preset });
+  }
+
+  /** Notifies the owner that the queue content changed (for persistence). */
+  notifyQueueChange(): void {
+    try {
+      this.onQueueChange?.(this);
+    } catch (error) {
+      logger.warn({ err: error, guild: this.guildId }, "Queue change notification failed");
+    }
+  }
+
   get skipVoteCount(): number {
     return this.skipVotes.size;
   }
 
   get playbackElapsedMs(): number | undefined {
-    return this.currentResource?.playbackDuration;
+    if (!this.currentResource) return undefined;
+    return (this.currentResource.playbackDuration ?? 0) + this._seekOffsetMs;
   }
 
   get nowPlayingMessage(): Message | undefined {
@@ -206,9 +264,11 @@ export class GuildPlayer {
       this.clearIdleTimer();
       this.clearEmptyChannelTimer();
 
-      if (this.connection && this.channelId === channel.id) return;
-      if (this.connection && this.channelId !== channel.id) {
-        throw new Error("Bot is already connected to another voice channel in this server");
+      if (channel.id !== this.channelId) {
+        throw new Error("Voice channel mismatch for this player session");
+      }
+      if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+        return;
       }
 
       this._state = "CONNECTING";
@@ -268,6 +328,7 @@ export class GuildPlayer {
   async add(track: Track): Promise<AddTrackResult> {
     return this.runExclusive(async () => {
       this.clearIdleTimer();
+      this.autoplayCount = 0;
       if (!this._currentTrack && this.audioPlayer.state.status === AudioPlayerStatus.Idle) {
         await this.startTrack(track);
         return { started: true, position: 0 };
@@ -275,6 +336,7 @@ export class GuildPlayer {
 
       const position = this.queue.enqueue(track);
       logger.info({ guild: this.guildId, track: track.title, position }, "Added to queue");
+      this.notifyQueueChange();
       return { started: false, position };
     });
   }
@@ -282,6 +344,7 @@ export class GuildPlayer {
   async playNext(track: Track): Promise<AddTrackResult> {
     return this.runExclusive(async () => {
       this.clearIdleTimer();
+      this.autoplayCount = 0;
       if (!this._currentTrack && this.audioPlayer.state.status === AudioPlayerStatus.Idle) {
         await this.startTrack(track);
         return { started: true, position: 0 };
@@ -289,6 +352,7 @@ export class GuildPlayer {
 
       const position = this.queue.enqueueFront(track);
       logger.info({ guild: this.guildId, track: track.title }, "Queued next");
+      this.notifyQueueChange();
       return { started: false, position };
     });
   }
@@ -397,6 +461,47 @@ export class GuildPlayer {
     });
   }
 
+  /** Restarts the current track at the given position (in seconds). */
+  async seek(seconds: number): Promise<boolean> {
+    return this.runExclusive(async () => {
+      const track = this._currentTrack;
+      if (!track) return false;
+
+      const target = Math.max(0, Math.floor(seconds));
+      if (track.duration !== undefined && target >= track.duration) {
+        this.bypassLoop = true;
+        await this.killProcesses();
+        this.audioPlayer.stop(true);
+        return true;
+      }
+
+      await this.reloadCurrent(track, target);
+      return true;
+    });
+  }
+
+  /** Replays the last finished track, if any. */
+  async previous(): Promise<Track | undefined> {
+    return this.runExclusive(async () => {
+      const previous = this.history.pop();
+      if (!previous) return undefined;
+
+      if (this._currentTrack) {
+        await this.reloadCurrent(previous, 0);
+      } else {
+        await this.startTrack(previous, 0);
+      }
+      return previous;
+    });
+  }
+
+  private async reloadCurrent(track: Track, startSeconds: number): Promise<void> {
+    this.suppressNextIdle = true;
+    await this.killProcesses();
+    this.audioPlayer.stop(true);
+    await this.startTrack(track, startSeconds);
+  }
+
   async stop(): Promise<void> {
     return this.runExclusive(async () => {
       this._state = "STOPPING";
@@ -404,9 +509,11 @@ export class GuildPlayer {
       this._currentTrack = undefined;
       this.skipVotes.clear();
       this.bypassLoop = true;
+      this.autoplayCount = 0;
       await this.killProcesses();
       this.audioPlayer.stop(true);
       this._state = "IDLE";
+      this.notifyQueueChange();
       this.scheduleIdleDisconnect();
     });
   }
@@ -427,9 +534,15 @@ export class GuildPlayer {
   }
 
   private async playNextInternal(finished?: Track): Promise<void> {
-    const next = decideNext(finished, this._loopMode, this.queue);
+    let next = decideNext(finished, this._loopMode, this.queue);
+
+    if (!next && finished && this._autoplay) {
+      next = await this.resolveAutoplay(finished);
+    }
+
     if (!next) {
       this._state = "IDLE";
+      this.notifyQueueChange();
       this.scheduleIdleDisconnect();
       return;
     }
@@ -443,7 +556,46 @@ export class GuildPlayer {
     }
   }
 
-  private async startTrack(track: Track): Promise<void> {
+  private async resolveAutoplay(seed: Track): Promise<Track | undefined> {
+    if (!this.onAutoplay) return undefined;
+    if (this.autoplayCount >= env.autoplayMaxConsecutive) {
+      logger.info(
+        { guild: this.guildId, count: this.autoplayCount },
+        "Autoplay limit reached, stopping",
+      );
+      return undefined;
+    }
+
+    try {
+      const related = await this.onAutoplay(seed, this.recentTrackIds);
+      if (!related || this.recentTrackIds.has(related.id)) return undefined;
+      this.autoplayCount += 1;
+      logger.info(
+        { guild: this.guildId, seed: seed.title, related: related.title, count: this.autoplayCount },
+        "Autoplay selected a related track",
+      );
+      return related;
+    } catch (error) {
+      logger.warn({ err: error, guild: this.guildId, seed: seed.title }, "Autoplay lookup failed");
+      return undefined;
+    }
+  }
+
+  private rememberTrack(track: Track): void {
+    this.recentTrackIds.delete(track.id);
+    this.recentTrackIds.add(track.id);
+    if (this.recentTrackIds.size > 25) {
+      const oldest = this.recentTrackIds.values().next().value;
+      if (oldest !== undefined) this.recentTrackIds.delete(oldest);
+    }
+  }
+
+  private pushHistory(track: Track): void {
+    this.history.push(track);
+    if (this.history.length > 25) this.history.shift();
+  }
+
+  private async startTrack(track: Track, startSeconds = 0): Promise<void> {
     if (!this.connection || this.connection.state.status !== VoiceConnectionStatus.Ready) {
       throw new Error("Voice connection is not ready");
     }
@@ -451,15 +603,21 @@ export class GuildPlayer {
     this.clearIdleTimer();
     this._state = "BUFFERING";
     this._currentTrack = track;
+    this._seekOffsetMs = Math.max(0, Math.floor(startSeconds)) * 1000;
+    this.rememberTrack(track);
     this.skipVotes.clear();
     await this.killProcesses();
+    this.notifyQueueChange();
 
     const attempts = Math.max(1, env.maxStreamRetries + 1);
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
-        const { processes, resource } = await this.pipeline.create(track, this._volume);
+        const { processes, resource } = await this.pipeline.create(track, this._volume, {
+          filter: this._filter,
+          startSeconds,
+        });
         this.childProcesses = processes;
         this.currentResource = resource;
         this.audioPlayer.play(resource);
@@ -587,8 +745,8 @@ export class GuildPlayer {
     }
     this.connection = undefined;
     this._state = "IDLE";
-    this.onDestroyed(this.guildId);
-    logger.info({ guild: this.guildId }, "Guild player destroyed");
+    this.onDestroyed(this.sessionId);
+    logger.info({ guild: this.guildId, channel: this.channelId }, "Guild player destroyed");
   }
 
   private runExclusive<T>(operation: () => Promise<T>): Promise<T> {

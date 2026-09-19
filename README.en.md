@@ -20,7 +20,16 @@
 ## ✨ Features
 
 - 🔎 **YouTube search** or direct URL playback, with **autocomplete** on `/play`
+- 🌐 **Multi-source**: SoundCloud (real stream), radio / direct URLs, and **Spotify / Deezer / Apple Music** links resolved to a YouTube search
 - 📃 **Per-server queue** (no cross-guild mixing) with **pagination**
+- 🎧 **Multi-session**: several voice channels at once in the same server, with independent queues and settings
+- 📚 **YouTube playlists**: import by URL (`/playlist` or `/play` with a playlist link)
+- ♾️ **Autoplay**: chains related tracks when the queue runs out (`/autoplay`)
+- 🎛️ **Audio filters**: bassboost, nightcore, vaporwave, 8D, treble, loudness normalization (`/filter`)
+- 🎤 **Synced lyrics** via lrclib (`/lyrics`)
+- 📊 **Observability**: `/status` (uptime, active sessions, voice latency, memory)
+- ⏩ **Seek** and **previous track**: navigate within a track (`/seek`, `/previous`, ⏪/⏩ buttons)
+- 💾 **Queue persistence**: per-channel queues resume after a restart
 - 🔁 **Loop** track / queue, 🔀 **shuffle**, ⏭ **play next** (`/playnext`)
 - ⏯️ **Button controls**: pause, resume, skip, stop, vote-skip, volume
 - 📊 **Live progress** in `/nowplaying` (bar + elapsed/total time)
@@ -34,21 +43,28 @@
 
 | Command | Description |
 |---|---|
-| `/play query:<text or URL>` | Search or queue a track (autocomplete) |
+| `/play query:<text or URL>` | Search or queue a track (autocomplete, playlists) |
 | `/playnext query:<text or URL>` | Insert a track right after the current one |
+| `/playlist url:<URL> [limit:<n>]` | Import a YouTube playlist into the queue |
 | `/pause` · `/resume` | Pause / resume playback |
 | `/skip` | Skip to the next track |
+| `/previous` | Replay the previous track |
 | `/voteskip` | Vote to skip the current track |
 | `/stop` | Stop playback and clear the queue |
 | `/queue` | Show the queue (paginated) |
 | `/nowplaying` | Current track + live progress bar |
+| `/seek position:<seconds\|mm:ss>` | Move playback to a position |
+| `/filter preset:<…>` | Apply an audio filter (shows the current one if omitted) |
+| `/lyrics [query:<text>]` | Show lyrics (current track or a search) |
 | `/loop mode:<off\|track\|queue>` | Repeat: off, track or queue |
+| `/autoplay mode:<on\|off>` | Enable/disable chaining of related tracks |
 | `/shuffle` | Shuffle the queue |
 | `/remove position:<n>` | Remove a track from the queue |
 | `/clear` | Clear the queue |
 | `/volume level:<0-100>` | Set the volume (shows current volume if omitted) |
 | `/leave` | Disconnect the bot from the voice channel |
 | `/testaudio` | Play a local 3 s tone to test voice |
+| `/status` | Bot status: uptime, guilds, sessions, latency, memory |
 | `/help` | List commands |
 
 ## ✅ Requirements
@@ -103,10 +119,20 @@ All variables are optional unless stated otherwise.
 | `NOWPLAYING_LIVE` | `true` | Refresh the progress bar |
 | `VOTE_SKIP_MIN` / `VOTE_SKIP_RATIO` | `2` / `0.5` | Vote-skip threshold |
 | `VOLUME_STEP` | `5` | Volume button step |
+| `SEEK_STEP_SECONDS` | `10` | Seek button step (⏪/⏩) |
 | `VOLUME_HEADROOM_DB` / `VOLUME_RANGE_DB` | `3` / `30` | Perceptual volume curve (dB) |
 | `AUTOCOMPLETE_ENABLED` | `true` | Autocomplete on `/play` |
+| `PLAYLIST_MAX_ITEMS` | `50` | Max tracks imported per playlist |
+| `AUTOPLAY_DEFAULT` | `false` | Autoplay enabled by default for new channels |
+| `AUTOPLAY_MAX_CONSECUTIVE` | `10` | Max tracks chained automatically |
+| `QUEUE_PERSIST` | `true` | Persist per-channel queues to resume after a restart |
+| `QUEUE_PERSIST_DEBOUNCE_MS` | `1000` | Write debounce for persisted queues |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | — | Spotify credentials (enables Spotify → YouTube link resolution) |
+| `LYRICS_ENABLED` | `true` | Enable `/lyrics` |
+| `LYRICS_API_BASE` | `https://lrclib.net` | Lyrics API base URL |
+| `LYRICS_TIMEOUT_MS` | `8000` | Lyrics request timeout |
 | `YTDLP_PATH` / `FFMPEG_PATH` | `yt-dlp` / `ffmpeg` | Binary paths |
-| `DATA_DIR` | `data` (`/data` in Docker) | Persistence directory for per-guild settings (volume) |
+| `DATA_DIR` | `data` (`/data` in Docker) | Persistence directory for settings and queues |
 
 ## 🐳 Docker
 
@@ -125,7 +151,7 @@ Discord
   ↓
 discord.js (Client)
   ↓
-PlayerManager ──► GuildPlayer (one per server) + QueueManager
+PlayerManager ──► GuildPlayer (one per voice channel) + QueueManager
                         ↓
                    AudioPipeline ──► AudioProvider
                         ↓                 ↓
@@ -136,7 +162,7 @@ PlayerManager ──► GuildPlayer (one per server) + QueueManager
                   Discord Voice
 ```
 
-- `GuildPlayer` holds per-server state: queue, loop mode, volume, skip votes, now-playing message.
+- `GuildPlayer` holds the state of one session (server + voice channel): queue, loop mode, volume, skip votes, now-playing message — several sessions can run in parallel within the same server.
 - `decideNext()` (a pure function) determines the next track according to the loop mode.
 - **YouTube URLs are validated** and the **direct stream is resolved just-in-time** (avoids expiry while queued).
 - Autocomplete uses a fast suggestions endpoint (never `yt-dlp`, too slow for Discord's 3 s limit).
@@ -149,7 +175,7 @@ src/
   interactions/    # buttons (music, queue pagination)
   music/           # GuildPlayer, PlayerManager, QueueManager, decideNext…
   audio/           # AudioPipeline (FFmpeg)
-  providers/       # YouTubeProvider (yt-dlp), AudioProvider
+  providers/       # ProviderRegistry (YouTube, SoundCloud, radio, Spotify/Deezer/Apple), AudioProvider
   services/        # suggestions (autocomplete), nowPlaying (live progress)
   ui/              # embeds, buttons, progress bar
   utils/           # logger, cooldown, time, process

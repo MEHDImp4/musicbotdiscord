@@ -33,6 +33,7 @@ export const remove: CommandDefinition = {
       return;
     }
 
+    context.player.notifyQueueChange();
     await replyTemporary(interaction, `🗑️ **${removed.title}** retiré de la file.`);
   },
 };

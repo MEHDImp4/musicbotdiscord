@@ -27,12 +27,6 @@ export const playnext: CommandDefinition = {
       return;
     }
 
-    const existing = players.get(interaction.guildId);
-    if (existing?.isConnected && existing.channelId !== channel.id) {
-      await interaction.reply({ content: "❌ Tu dois être dans le même salon vocal que le bot.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
     if (!canJoinAndSpeak(channel, interaction)) {
       await interaction.reply({ content: "❌ Je n'ai pas la permission de rejoindre ou parler dans ce salon.", flags: MessageFlags.Ephemeral });
       return;
@@ -47,7 +41,7 @@ export const playnext: CommandDefinition = {
         username: interaction.user.displayName || interaction.user.username,
       });
 
-      const player = players.getOrCreate(interaction.guildId);
+      const player = players.getOrCreate(interaction.guildId, channel.id);
       if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
       await player.connect(channel);
       const result = await player.playNext(track);

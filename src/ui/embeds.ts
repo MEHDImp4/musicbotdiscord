@@ -1,4 +1,5 @@
 import { EmbedBuilder } from "discord.js";
+import { FILTER_LABELS } from "../audio/filters";
 import { formatVolume } from "../audio/volume";
 import type { GuildPlayer } from "../music/GuildPlayer";
 import type { Track } from "../music/Track";
@@ -43,6 +44,8 @@ export function nowPlayingEmbed(player: GuildPlayer): EmbedBuilder {
       { name: "Progression", value: renderProgressBar(elapsed, track.duration) },
       { name: "État", value: player.state, inline: true },
       { name: "Volume", value: formatVolume(player.volume), inline: true },
+      { name: "Autoplay", value: player.autoplay ? "Activé" : "Désactivé", inline: true },
+      { name: "Filtre", value: FILTER_LABELS[player.filter], inline: true },
       { name: "Demandé par", value: track.requestedBy.username, inline: true },
     )
     .setURL(track.webpageUrl);

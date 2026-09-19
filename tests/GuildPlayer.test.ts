@@ -17,18 +17,24 @@ class StubProvider implements AudioProvider {
 
 describe("GuildPlayer", () => {
   it("starts with lastTextChannelId undefined", () => {
-    const player = new GuildPlayer("guild-1", new StubProvider(), () => {});
+    const player = new GuildPlayer("guild-1", "channel-1", new StubProvider(), () => {});
     expect(player.lastTextChannelId).toBeUndefined();
   });
 
+  it("exposes its session identity", () => {
+    const player = new GuildPlayer("guild-1", "channel-1", new StubProvider(), () => {});
+    expect(player.sessionId).toBe("guild-1:channel-1");
+    expect(player.channelId).toBe("channel-1");
+  });
+
   it("stores and retrieves lastTextChannelId", () => {
-    const player = new GuildPlayer("guild-1", new StubProvider(), () => {});
+    const player = new GuildPlayer("guild-1", "channel-1", new StubProvider(), () => {});
     player.lastTextChannelId = "channel-123";
     expect(player.lastTextChannelId).toBe("channel-123");
   });
 
   it("allows setting lastTextChannelId to undefined", () => {
-    const player = new GuildPlayer("guild-1", new StubProvider(), () => {});
+    const player = new GuildPlayer("guild-1", "channel-1", new StubProvider(), () => {});
     player.lastTextChannelId = "channel-123";
     player.lastTextChannelId = undefined;
     expect(player.lastTextChannelId).toBeUndefined();

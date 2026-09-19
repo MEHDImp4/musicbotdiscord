@@ -17,6 +17,7 @@ export const shuffle: CommandDefinition = {
     }
 
     context.player.queue.shuffle();
+    context.player.notifyQueueChange();
     await replyTemporary(interaction, `🔀 File mélangée (${count} morceaux).`);
   },
 };

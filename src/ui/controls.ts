@@ -3,81 +3,142 @@ import {
   ButtonBuilder,
   ButtonStyle,
 } from "discord.js";
+import { env } from "../config/env";
 
-export const MUSIC_CONTROL_IDS = {
-  pause: "music:pause",
-  resume: "music:resume",
-  skip: "music:skip",
-  stop: "music:stop",
-  voteskip: "music:voteskip",
-  volumeDown: "music:voldown",
-  volumeUp: "music:volup",
-} as const;
+export type MusicControlAction =
+  | "pause"
+  | "resume"
+  | "skip"
+  | "stop"
+  | "voteskip"
+  | "voldown"
+  | "volup"
+  | "seekback"
+  | "seekforward";
 
-export const QUEUE_PAGE_IDS = {
-  prefix: "queue:page:",
-} as const;
+const MUSIC_PREFIX = "mc:";
+const QUEUE_PREFIX = "qp:";
 
-export function musicControlsRow(): ActionRowBuilder<ButtonBuilder> {
+const MUSIC_ACTIONS: readonly MusicControlAction[] = [
+  "pause",
+  "resume",
+  "skip",
+  "stop",
+  "voteskip",
+  "voldown",
+  "volup",
+  "seekback",
+  "seekforward",
+];
+
+export function musicControlId(channelId: string, action: MusicControlAction): string {
+  return `${MUSIC_PREFIX}${channelId}:${action}`;
+}
+
+export function parseMusicControl(
+  customId: string,
+): { channelId: string; action: MusicControlAction } | null {
+  if (!customId.startsWith(MUSIC_PREFIX)) return null;
+  const rest = customId.slice(MUSIC_PREFIX.length);
+  const separator = rest.indexOf(":");
+  if (separator <= 0 || separator === rest.length - 1) return null;
+
+  const channelId = rest.slice(0, separator);
+  const action = rest.slice(separator + 1) as MusicControlAction;
+  if (!MUSIC_ACTIONS.includes(action)) return null;
+  return { channelId, action };
+}
+
+export function queuePageId(channelId: string, page: number): string {
+  return `${QUEUE_PREFIX}${channelId}:${page}`;
+}
+
+export function parseQueuePage(customId: string): { channelId: string; page: number } | null {
+  if (!customId.startsWith(QUEUE_PREFIX)) return null;
+  const rest = customId.slice(QUEUE_PREFIX.length);
+  const separator = rest.indexOf(":");
+  if (separator <= 0 || separator === rest.length - 1) return null;
+
+  const channelId = rest.slice(0, separator);
+  const page = Number.parseInt(rest.slice(separator + 1), 10);
+  if (!Number.isInteger(page) || page < 0) return null;
+  return { channelId, page };
+}
+
+export function musicControlsRow(channelId: string): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(MUSIC_CONTROL_IDS.pause)
+      .setCustomId(musicControlId(channelId, "pause"))
       .setEmoji("⏸️")
       .setLabel("Pause")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(MUSIC_CONTROL_IDS.resume)
+      .setCustomId(musicControlId(channelId, "resume"))
       .setEmoji("▶️")
       .setLabel("Reprendre")
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(MUSIC_CONTROL_IDS.skip)
+      .setCustomId(musicControlId(channelId, "skip"))
       .setEmoji("⏭️")
       .setLabel("Suivant")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
-      .setCustomId(MUSIC_CONTROL_IDS.stop)
+      .setCustomId(musicControlId(channelId, "stop"))
       .setEmoji("⏹️")
       .setLabel("Stop")
       .setStyle(ButtonStyle.Danger),
   );
 }
 
-export function audioControlsRow(): ActionRowBuilder<ButtonBuilder> {
+export function audioControlsRow(channelId: string): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(MUSIC_CONTROL_IDS.voteskip)
+      .setCustomId(musicControlId(channelId, "voteskip"))
       .setEmoji("🗳️")
       .setLabel("Vote skip")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(MUSIC_CONTROL_IDS.volumeDown)
+      .setCustomId(musicControlId(channelId, "seekback"))
+      .setEmoji("⏪")
+      .setLabel(`-${env.seekStepSeconds}s`)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(musicControlId(channelId, "seekforward"))
+      .setEmoji("⏩")
+      .setLabel(`+${env.seekStepSeconds}s`)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(musicControlId(channelId, "voldown"))
       .setEmoji("🔉")
       .setLabel("-10")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(MUSIC_CONTROL_IDS.volumeUp)
+      .setCustomId(musicControlId(channelId, "volup"))
       .setEmoji("🔊")
       .setLabel("+10")
       .setStyle(ButtonStyle.Secondary),
   );
 }
 
-export function playbackControlsRows(): ActionRowBuilder<ButtonBuilder>[] {
-  return [musicControlsRow(), audioControlsRow()];
+export function playbackControlsRows(channelId: string): ActionRowBuilder<ButtonBuilder>[] {
+  return [musicControlsRow(channelId), audioControlsRow(channelId)];
 }
 
-export function queueControlsRow(page: number, totalPages: number): ActionRowBuilder<ButtonBuilder> {
+export function queueControlsRow(
+  channelId: string,
+  page: number,
+  totalPages: number,
+): ActionRowBuilder<ButtonBuilder> {
   const lastPage = Math.max(0, totalPages - 1);
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`${QUEUE_PAGE_IDS.prefix}${Math.max(0, page - 1)}`)
+      .setCustomId(queuePageId(channelId, Math.max(0, page - 1)))
       .setEmoji("◀️")
       .setLabel("Précédent")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 0),
     new ButtonBuilder()
-      .setCustomId(`${QUEUE_PAGE_IDS.prefix}${Math.min(lastPage, page + 1)}`)
+      .setCustomId(queuePageId(channelId, Math.min(lastPage, page + 1)))
       .setEmoji("▶️")
       .setLabel("Suivant")
       .setStyle(ButtonStyle.Secondary)

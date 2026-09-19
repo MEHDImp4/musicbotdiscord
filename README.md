@@ -20,7 +20,16 @@
 ## ✨ Fonctionnalités
 
 - 🔎 **Recherche YouTube** ou lecture directe par URL, avec **autocomplétion** sur `/play`
+- 🌐 **Multi-sources** : SoundCloud (flux réel), flux radio / URL directe, et liens **Spotify / Deezer / Apple Music** convertis en recherche YouTube
 - 📃 **File d'attente par serveur** (aucun mélange entre guildes) avec **pagination**
+- 🎧 **Multi-sessions** : plusieurs salons vocaux simultanés dans un même serveur, avec files et réglages indépendants
+- 📚 **Playlists YouTube** : import par URL (`/playlist` ou `/play` avec un lien de playlist)
+- ♾️ **Autoplay** : enchaîne des titres similaires quand la file se vide (`/autoplay`)
+- 🎛️ **Filtres audio** : bassboost, nightcore, vaporwave, 8D, treble, normalisation (`/filter`)
+- 🎤 **Paroles synchronisées** via lrclib (`/lyrics`)
+- 📊 **Observabilité** : `/status` (uptime, sessions actives, latence voix, mémoire)
+- ⏩ **Seek** et **morceau précédent** : navigation dans le morceau (`/seek`, `/previous`, boutons ⏪/⏩)
+- 💾 **Persistance de la file** : reprise des files par salon après un redémarrage
 - 🔁 **Boucle** morceau / file, 🔀 **shuffle**, ⏭ **insertion en tête** (`/playnext`)
 - ⏯️ **Contrôles par boutons** : pause, reprise, suivant, stop, vote-skip, volume ±
 - 📊 **Progression en direct** dans `/nowplaying` (barre + temps écoulé/total)
@@ -34,21 +43,28 @@
 
 | Commande | Description |
 |---|---|
-| `/play query:<texte ou URL>` | Recherche ou ajoute un morceau (autocomplete) |
+| `/play query:<texte ou URL>` | Recherche ou ajoute un morceau (autocomplete, playlists) |
 | `/playnext query:<texte ou URL>` | Insère un morceau juste après le morceau courant |
+| `/playlist url:<URL> [limit:<n>]` | Importe une playlist YouTube dans la file |
 | `/pause` · `/resume` | Met en pause / reprend la lecture |
 | `/skip` | Passe au morceau suivant |
+| `/previous` | Rejoue le morceau précédent |
 | `/voteskip` | Vote pour passer au morceau suivant |
 | `/stop` | Arrête la lecture et vide la file |
 | `/queue` | Affiche la file d'attente (paginée) |
 | `/nowplaying` | Morceau en cours + barre de progression live |
+| `/seek position:<secondes\|mm:ss>` | Déplace la lecture à une position |
+| `/filter preset:<…>` | Applique un filtre audio (affiche le filtre si omis) |
+| `/lyrics [query:<texte>]` | Affiche les paroles (morceau en cours ou recherche) |
 | `/loop mode:<off\|track\|queue>` | Répétition : désactivée, morceau ou file |
+| `/autoplay mode:<on\|off>` | Active/désactive l'enchaînement de titres similaires |
 | `/shuffle` | Mélange la file d'attente |
 | `/remove position:<n>` | Retire un morceau de la file |
 | `/clear` | Vide la file d'attente |
 | `/volume level:<0-100>` | Règle le volume (affiche le volume si omis) |
 | `/leave` | Déconnecte le bot du salon vocal |
 | `/testaudio` | Joue un bip local de 3 s pour tester la voix |
+| `/status` | État du bot : uptime, serveurs, sessions, latences, mémoire |
 | `/help` | Liste les commandes |
 
 ## ✅ Prérequis
@@ -101,10 +117,20 @@ Toutes les variables sont optionnelles sauf mention contraire.
 | `NOWPLAYING_LIVE` | `true` | Rafraîchit la barre de progression |
 | `VOTE_SKIP_MIN` / `VOTE_SKIP_RATIO` | `2` / `0.5` | Seuil du vote-skip |
 | `VOLUME_STEP` | `5` | Pas des boutons de volume |
+| `SEEK_STEP_SECONDS` | `10` | Pas des boutons de déplacement ⏪/⏩ |
 | `VOLUME_HEADROOM_DB` / `VOLUME_RANGE_DB` | `3` / `30` | Courbe de volume perceptuelle (dB) |
 | `AUTOCOMPLETE_ENABLED` | `true` | Autocomplétion sur `/play` |
+| `PLAYLIST_MAX_ITEMS` | `50` | Nombre max de morceaux importés par playlist |
+| `AUTOPLAY_DEFAULT` | `false` | Autoplay activé par défaut sur les nouveaux salons |
+| `AUTOPLAY_MAX_CONSECUTIVE` | `10` | Nombre max de titres enchaînés automatiquement |
+| `QUEUE_PERSIST` | `true` | Persiste les files par salon pour une reprise après redémarrage |
+| `QUEUE_PERSIST_DEBOUNCE_MS` | `1000` | Délai d'écriture des files persistées |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | — | Credentials Spotify (active la résolution des liens Spotify → YouTube) |
+| `LYRICS_ENABLED` | `true` | Active `/lyrics` |
+| `LYRICS_API_BASE` | `https://lrclib.net` | Base de l'API de paroles |
+| `LYRICS_TIMEOUT_MS` | `8000` | Timeout des requêtes de paroles |
 | `YTDLP_PATH` / `FFMPEG_PATH` | `yt-dlp` / `ffmpeg` | Chemins des binaires |
-| `DATA_DIR` | `data` (`/data` en Docker) | Dossier de persistance des réglages par serveur (volume) |
+| `DATA_DIR` | `data` (`/data` en Docker) | Dossier de persistance (réglages et files par salon) |
 
 ## 🐳 Docker
 
@@ -123,7 +149,7 @@ Discord
   ↓
 discord.js (Client)
   ↓
-PlayerManager ──► GuildPlayer (1 par serveur) + QueueManager
+PlayerManager ──► GuildPlayer (1 par salon vocal) + QueueManager
                         ↓
                    AudioPipeline ──► AudioProvider
                         ↓                 ↓
@@ -134,9 +160,9 @@ PlayerManager ──► GuildPlayer (1 par serveur) + QueueManager
                   Discord Voice
 ```
 
-- `GuildPlayer` détient l'état par serveur : file, mode boucle, volume, votes de skip, message now-playing.
+- `GuildPlayer` détient l'état d'une session (serveur + salon vocal) : file, mode boucle, volume, votes de skip, message now-playing — plusieurs sessions peuvent tourner en parallèle dans un même serveur.
 - `decideNext()` (fonction pure) détermine le morceau suivant selon le mode boucle.
-- Les **URLs sont validées YouTube** et le **flux direct est résolu juste avant lecture** (évite l'expiration pendant l'attente).
+- Les **URLs sont validées par fournisseur** (hôtes YouTube/SoundCloud/Spotify/Deezer/Apple reconnus, sinon flux direct) et le **flux est résolu juste avant lecture** (évite l'expiration pendant l'attente).
 - L'autocomplétion utilise un endpoint de suggestions rapide (jamais `yt-dlp`, trop lent pour la limite de 3 s de Discord).
 
 ## 📁 Structure
@@ -147,7 +173,7 @@ src/
   interactions/    # boutons (musique, pagination queue)
   music/           # GuildPlayer, PlayerManager, QueueManager, decideNext…
   audio/           # AudioPipeline (FFmpeg)
-  providers/       # YouTubeProvider (yt-dlp), AudioProvider
+  providers/       # ProviderRegistry (YouTube, SoundCloud, radio, Spotify/Deezer/Apple), AudioProvider
   services/        # suggestions (autocomplete), nowPlaying (progress live)
   ui/              # embeds, boutons, barre de progression
   utils/           # logger, cooldown, time, process
@@ -167,7 +193,7 @@ Couvre la logique pure : opérations de file, `decideNext` (boucle), cooldowns, 
 
 - Le token Discord **n'est jamais versionné** (`.env` et `.env.docker` sont ignorés par Git).
 - `yt-dlp` et FFmpeg sont lancés via `spawn()` avec une **liste d'arguments** (`shell: false`) — aucune commande shell construite depuis l'entrée utilisateur.
-- Les URLs sont validées YouTube avant résolution ; les processus externes ont des timeouts et sont nettoyés à l'arrêt.
+- Les URLs sont validées par fournisseur avant résolution ; les processus externes ont des timeouts et sont nettoyés à l'arrêt.
 
 ## 🛠️ Dépannage
 

@@ -1,7 +1,9 @@
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
+import { env } from "../config/env";
 import { playbackControlsRows } from "../ui/controls";
 import { trackEmbed } from "../ui/embeds";
 import { canJoinAndSpeak, memberVoiceChannel } from "./helpers";
+import { importPlaylist } from "./playlistImport";
 import type { CommandDefinition } from "./types";
 
 export const play: CommandDefinition = {
@@ -29,12 +31,6 @@ export const play: CommandDefinition = {
       return;
     }
 
-    const existing = players.get(interaction.guildId);
-    if (existing?.isConnected && existing.channelId !== channel.id) {
-      await interaction.reply({ content: "❌ Tu dois être dans le même salon vocal que le bot.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
     if (!canJoinAndSpeak(channel, interaction)) {
       await interaction.reply({ content: "❌ Je n'ai pas la permission de rejoindre ou parler dans ce salon.", flags: MessageFlags.Ephemeral });
       return;
@@ -43,13 +39,18 @@ export const play: CommandDefinition = {
     await interaction.deferReply();
     const query = interaction.options.getString("query", true);
 
+    if (players.isPlaylistInput(query)) {
+      await importPlaylist(interaction, players, channel, query, env.playlistMaxItems);
+      return;
+    }
+
     try {
       const track = await players.resolveTrack(query, {
         id: interaction.user.id,
         username: interaction.user.displayName || interaction.user.username,
       });
 
-      const player = players.getOrCreate(interaction.guildId);
+      const player = players.getOrCreate(interaction.guildId, channel.id);
       if (interaction.channelId) player.lastTextChannelId = interaction.channelId;
       await player.connect(channel);
       const result = await player.add(track);
@@ -57,7 +58,7 @@ export const play: CommandDefinition = {
       if (result.started) {
         await interaction.editReply({
           embeds: [trackEmbed("🎵 Lecture en cours", track, player.volume)],
-          components: playbackControlsRows(),
+          components: playbackControlsRows(player.channelId),
         });
       } else {
         await interaction.editReply({

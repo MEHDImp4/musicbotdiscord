@@ -4,6 +4,7 @@ import { env } from "../config/env";
 import type { Track } from "../music/Track";
 import type { AudioProvider } from "../providers/AudioProvider";
 import { logger } from "../utils/logger";
+import { buildFilterChain, type FilterPreset } from "./filters";
 import { percentToGain } from "./volume";
 
 export interface AudioPipelineResult {
@@ -11,30 +12,48 @@ export interface AudioPipelineResult {
   resource: AudioResource<Track>;
 }
 
+export interface AudioPipelineOptions {
+  filter?: FilterPreset;
+  startSeconds?: number;
+}
+
 export class AudioPipeline {
   constructor(private readonly provider: AudioProvider) {}
 
-  async create(track: Track, volume = 100): Promise<AudioPipelineResult> {
-    const { stream: audioStream, process: ytdlpProcess } = await this.provider.createReadStream(track);
+  async create(
+    track: Track,
+    volume = 100,
+    options: AudioPipelineOptions = {},
+  ): Promise<AudioPipelineResult> {
+    const source = await this.provider.createSource(track);
+
+    const isLive = track.isLive === true;
+    const startSeconds = isLive ? 0 : Math.max(0, options.startSeconds ?? 0);
+    const filterChain = buildFilterChain(
+      options.filter ?? "off",
+      isLive ? undefined : track.duration,
+      startSeconds,
+    );
+
+    const args = ["-hide_banner", "-loglevel", "warning", "-nostdin"];
+    if (source.kind === "url") {
+      args.push(
+        "-reconnect", "1",
+        "-reconnect_streamed", "1",
+        "-reconnect_delay_max", "5",
+        "-i", source.url,
+      );
+    } else {
+      args.push("-i", "pipe:0");
+    }
+    if (startSeconds > 0) args.push("-ss", String(Math.floor(startSeconds)));
+    args.push("-vn");
+    if (filterChain) args.push("-af", filterChain);
+    args.push("-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1");
 
     const ffmpeg = spawn(
       env.ffmpegPath,
-      [
-        "-hide_banner",
-        "-loglevel",
-        "warning",
-        "-nostdin",
-        "-i",
-        "pipe:0",
-        "-vn",
-        "-f",
-        "s16le",
-        "-ar",
-        "48000",
-        "-ac",
-        "2",
-        "pipe:1",
-      ],
+      args,
       {
         stdio: ["pipe", "pipe", "pipe"],
         shell: false,
@@ -42,17 +61,21 @@ export class AudioPipeline {
       },
     );
 
-    let ffmpegStderr = "";
+    const processes: ChildProcess[] = [];
 
-    audioStream.pipe(ffmpeg.stdin);
-
-    audioStream.on("error", (error) => {
-      logger.error({ err: error, track: track.title }, "yt-dlp stream error");
-    });
+    if (source.kind === "pipe") {
+      source.stream.pipe(ffmpeg.stdin);
+      source.stream.on("error", (error) => {
+        logger.error({ err: error, track: track.title }, "Source stream error");
+      });
+      processes.push(source.process);
+    }
 
     ffmpeg.stdin.on("error", (error) => {
       logger.debug({ err: error, track: track.title }, "FFmpeg stdin closed");
     });
+
+    let ffmpegStderr = "";
 
     ffmpeg.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
@@ -80,6 +103,8 @@ export class AudioPipeline {
       }
     });
 
+    processes.push(ffmpeg);
+
     const resource = createAudioResource(ffmpeg.stdout, {
       inputType: StreamType.Raw,
       metadata: track,
@@ -89,6 +114,6 @@ export class AudioPipeline {
       resource.volume.setVolume(percentToGain(volume, env.volumeHeadroomDb, env.volumeRangeDb));
     }
 
-    return { processes: [ytdlpProcess, ffmpeg], resource };
+    return { processes, resource };
   }
 }

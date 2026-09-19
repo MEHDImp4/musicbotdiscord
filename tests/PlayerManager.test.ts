@@ -16,15 +16,47 @@ class StubProvider implements AudioProvider {
 }
 
 describe("PlayerManager", () => {
-  it("returns one player per guild and keeps guilds separated", () => {
+  it("returns one player per guild+channel and isolates sessions", () => {
     const manager = new PlayerManager(new StubProvider());
-    const guildA1 = manager.getOrCreate("guild-a");
-    const guildA2 = manager.getOrCreate("guild-a");
-    const guildB = manager.getOrCreate("guild-b");
+    const a1 = manager.getOrCreate("guild-a", "chan-1");
+    const a1again = manager.getOrCreate("guild-a", "chan-1");
+    const a2 = manager.getOrCreate("guild-a", "chan-2");
+    const b = manager.getOrCreate("guild-b", "chan-1");
 
-    expect(guildA1).toBe(guildA2);
-    expect(guildA1).not.toBe(guildB);
-    expect(manager.size).toBe(2);
+    expect(a1).toBe(a1again);
+    expect(a1).not.toBe(a2);
+    expect(a1).not.toBe(b);
+    expect(manager.size).toBe(3);
+  });
+
+  it("resolves players by guild and channel", () => {
+    const manager = new PlayerManager(new StubProvider());
+    const a1 = manager.getOrCreate("guild-a", "chan-1");
+    manager.getOrCreate("guild-a", "chan-2");
+    manager.getOrCreate("guild-b", "chan-1");
+
+    expect(manager.get("guild-a", "chan-1")).toBe(a1);
+    expect(manager.get("guild-a", "missing")).toBeUndefined();
+    expect(manager.get("guild-b", "chan-1")?.guildId).toBe("guild-b");
+  });
+
+  it("lists every session of a guild", () => {
+    const manager = new PlayerManager(new StubProvider());
+    manager.getOrCreate("guild-a", "chan-1");
+    manager.getOrCreate("guild-a", "chan-2");
+    manager.getOrCreate("guild-b", "chan-1");
+
+    expect(manager.getForGuild("guild-a")).toHaveLength(2);
+    expect(manager.getForGuild("guild-b")).toHaveLength(1);
+    expect(manager.getForGuild("guild-c")).toEqual([]);
+  });
+
+  it("finds a player by its voice channel", () => {
+    const manager = new PlayerManager(new StubProvider());
+    const a1 = manager.getOrCreate("guild-a", "chan-1");
+
+    expect(manager.getForChannel("chan-1")).toBe(a1);
+    expect(manager.getForChannel("chan-x")).toBeUndefined();
   });
 
   it("resolves text searches through the provider", async () => {
@@ -38,11 +70,12 @@ describe("PlayerManager", () => {
     expect(manager.activeGuildIds).toEqual([]);
   });
 
-  it("activeGuildIds returns guild IDs for connected players", () => {
+  it("activeGuildIds dedupes guilds of connected players", () => {
     const manager = new PlayerManager(new StubProvider());
-    manager.getOrCreate("guild-a");
-    manager.getOrCreate("guild-b");
-    // Players are not connected (no voice channel joined), so activeGuildIds should be empty
+    manager.getOrCreate("guild-a", "chan-1");
+    manager.getOrCreate("guild-a", "chan-2");
+    manager.getOrCreate("guild-b", "chan-1");
+    // Players are not connected (no voice channel joined), so this stays empty.
     expect(manager.activeGuildIds).toEqual([]);
   });
 });

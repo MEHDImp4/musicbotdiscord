@@ -1,15 +1,19 @@
 import { join } from "node:path";
 import type { Client } from "discord.js";
 import { env } from "../config/env";
-import type { AudioProvider } from "../providers/AudioProvider";
+import type { AudioProvider, PlaylistResult } from "../providers/AudioProvider";
+import { isPlaylistUrl } from "../providers/youtube";
 import { logger } from "../utils/logger";
 import { GuildPlayer } from "./GuildPlayer";
 import { GuildSettingsStore, type GuildSettings } from "./GuildSettingsStore";
+import { QueueStore } from "./QueueStore";
+import { toSessionId } from "./session";
 import type { RequestedBy, Track } from "./Track";
 
 export class PlayerManager {
   private readonly players = new Map<string, GuildPlayer>();
   private readonly settings: GuildSettingsStore;
+  private readonly queueStore?: QueueStore;
 
   constructor(
     private readonly provider: AudioProvider,
@@ -17,32 +21,104 @@ export class PlayerManager {
   ) {
     this.settings = new GuildSettingsStore(join(env.dataDir, "guild-settings.json"));
     this.settings.load();
+
+    if (env.queuePersist) {
+      this.queueStore = new QueueStore(join(env.dataDir, "queues.json"), env.queuePersistDebounceMs);
+      this.queueStore.load();
+    }
   }
 
-  get(guildId: string): GuildPlayer | undefined {
-    return this.players.get(guildId);
+  /** Returns the player bound to a specific voice channel, if any. */
+  get(guildId: string, channelId: string): GuildPlayer | undefined {
+    return this.players.get(toSessionId(guildId, channelId));
   }
 
-  getOrCreate(guildId: string): GuildPlayer {
-    const existing = this.players.get(guildId);
+  /** Returns every player of a guild (one per active voice channel). */
+  getForGuild(guildId: string): GuildPlayer[] {
+    const prefix = `${guildId}:`;
+    return [...this.players.entries()]
+      .filter(([sessionId]) => sessionId.startsWith(prefix))
+      .map(([, player]) => player);
+  }
+
+  /** Returns the player currently attached to a voice channel, across guilds. */
+  getForChannel(channelId: string): GuildPlayer | undefined {
+    return [...this.players.values()].find((player) => player.channelId === channelId);
+  }
+
+  getOrCreate(guildId: string, channelId: string): GuildPlayer {
+    const sessionId = toSessionId(guildId, channelId);
+    const existing = this.players.get(sessionId);
     if (existing) return existing;
 
     const player = new GuildPlayer(
       guildId,
+      channelId,
       this.provider,
       (id) => {
         if (this.players.get(id) === player) this.players.delete(id);
       },
-      (channelId, content) => {
-        void this.notify(channelId, content);
+      (textChannelId, content) => {
+        void this.notify(textChannelId, content);
       },
-      this.settings.get(guildId),
+      this.settings.get(sessionId, guildId),
       (patch) => {
-        this.settings.update(guildId, patch);
+        this.settings.update(sessionId, guildId, patch);
       },
+      (changed) => {
+        this.persistQueue(changed);
+      },
+      (seed, exclude) => this.autoplayRelated(seed, exclude),
     );
-    this.players.set(guildId, player);
+    this.players.set(sessionId, player);
+    this.restoreQueue(player);
     return player;
+  }
+
+  private async autoplayRelated(seed: Track, exclude: ReadonlySet<string>): Promise<Track | undefined> {
+    if (!this.provider.related) return undefined;
+    return this.provider.related(seed, exclude);
+  }
+
+  private restoreQueue(player: GuildPlayer): void {
+    const persisted = this.queueStore?.get(player.sessionId);
+    if (!persisted) return;
+
+    const ordered = [persisted.current, ...persisted.tracks].filter(
+      (track): track is Track => track !== undefined,
+    );
+
+    let restored = 0;
+    for (const track of ordered) {
+      try {
+        player.queue.enqueue(track);
+        restored += 1;
+      } catch {
+        break;
+      }
+    }
+
+    if (restored > 0) {
+      logger.info({ guild: player.guildId, channel: player.channelId, tracks: restored }, "Restored persisted queue");
+    }
+  }
+
+  private persistQueue(player: GuildPlayer): void {
+    if (!this.queueStore) return;
+    const tracks = [...player.queue.snapshot()];
+    const current = player.currentTrack;
+
+    if (!current && tracks.length === 0) {
+      this.queueStore.delete(player.sessionId);
+      return;
+    }
+
+    this.queueStore.set(player.sessionId, {
+      guildId: player.guildId,
+      channelId: player.channelId,
+      current,
+      tracks,
+    });
   }
 
   private async notify(channelId: string, content: string): Promise<void> {
@@ -57,10 +133,12 @@ export class PlayerManager {
     }
   }
 
-  async destroy(guildId: string): Promise<void> {
-    const player = this.players.get(guildId);
+  async destroy(guildId: string, channelId: string): Promise<void> {
+    const sessionId = toSessionId(guildId, channelId);
+    const player = this.players.get(sessionId);
     if (player) await player.destroy();
-    this.players.delete(guildId);
+    this.players.delete(sessionId);
+    this.queueStore?.delete(sessionId);
   }
 
   async destroyAll(): Promise<void> {
@@ -68,13 +146,44 @@ export class PlayerManager {
     this.players.clear();
   }
 
-  getGuildSettings(guildId: string): GuildSettings {
-    return this.settings.get(guildId);
+  getGuildSettings(sessionId: string, guildId: string): GuildSettings {
+    return this.settings.get(sessionId, guildId);
   }
 
   /** Persists any pending guild settings immediately. */
   flushSettings(): void {
     this.settings.flush();
+  }
+
+  /** Persists all in-memory queues immediately. */
+  flushQueues(): void {
+    if (!this.queueStore) return;
+    for (const player of this.players.values()) this.persistQueue(player);
+    this.queueStore.flush();
+  }
+
+  isPlaylistInput(input: string): boolean {
+    return isPlaylistUrl(input.trim());
+  }
+
+  async resolvePlaylist(input: string, requestedBy: RequestedBy, limit?: number): Promise<PlaylistResult> {
+    if (!this.provider.resolvePlaylist) {
+      throw new Error("Les playlists ne sont pas supportées par ce fournisseur");
+    }
+
+    const result = await this.provider.resolvePlaylist(
+      input.trim(),
+      requestedBy,
+      limit ?? env.playlistMaxItems,
+    );
+
+    const maxSeconds = env.maxTrackDurationMinutes * 60;
+    const tracks =
+      maxSeconds > 0
+        ? result.tracks.filter((track) => track.duration === undefined || track.duration <= maxSeconds)
+        : result.tracks;
+
+    return { title: result.title, tracks };
   }
 
   async resolveTrack(input: string, requestedBy: RequestedBy): Promise<Track> {
@@ -96,9 +205,11 @@ export class PlayerManager {
   }
 
   get activeGuildIds(): string[] {
-    return [...this.players.entries()]
-      .filter(([, player]) => player.isConnected)
-      .map(([guildId]) => guildId);
+    const guildIds = new Set<string>();
+    for (const player of this.players.values()) {
+      if (player.isConnected) guildIds.add(player.guildId);
+    }
+    return [...guildIds];
   }
 
   activePlayers(): GuildPlayer[] {

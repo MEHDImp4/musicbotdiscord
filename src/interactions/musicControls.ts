@@ -8,9 +8,8 @@ import { env } from "../config/env";
 import type { PlayerManager } from "../music/PlayerManager";
 import { computeSkipThreshold } from "../music/voteSkip";
 import { refreshNowPlaying } from "../services/nowPlaying";
-import { MUSIC_CONTROL_IDS } from "../ui/controls";
-
-const CONTROL_IDS = new Set<string>(Object.values(MUSIC_CONTROL_IDS));
+import { parseMusicControl } from "../ui/controls";
+import { formatDuration } from "../utils/time";
 
 async function replyPrivate(interaction: ButtonInteraction, content: string): Promise<void> {
   await interaction.reply({ content, flags: MessageFlags.Ephemeral });
@@ -23,8 +22,8 @@ async function replyPrivate(interaction: ButtonInteraction, content: string): Pr
   }, env.autoDeleteSeconds * 1000);
 }
 
-function botVoiceChannel(interaction: ButtonInteraction, channelId: string | undefined): VoiceBasedChannel | null {
-  if (!channelId || !interaction.guild) return null;
+function botVoiceChannel(interaction: ButtonInteraction, channelId: string): VoiceBasedChannel | null {
+  if (!interaction.guild) return null;
   const channel = interaction.guild.channels.cache.get(channelId);
   return channel?.isVoiceBased() ? channel : null;
 }
@@ -33,14 +32,15 @@ export async function handleMusicControl(
   interaction: ButtonInteraction,
   players: PlayerManager,
 ): Promise<boolean> {
-  if (!CONTROL_IDS.has(interaction.customId)) return false;
+  const parsed = parseMusicControl(interaction.customId);
+  if (!parsed) return false;
 
   if (!interaction.guildId || !interaction.guild) {
     await replyPrivate(interaction, "❌ Ce bouton doit être utilisé dans un serveur.");
     return true;
   }
 
-  const player = players.get(interaction.guildId);
+  const player = players.get(interaction.guildId, parsed.channelId);
   if (!player || !player.isConnected) {
     await replyPrivate(interaction, "❌ Le bot n'est plus connecté à un salon vocal.");
     return true;
@@ -54,37 +54,39 @@ export async function handleMusicControl(
     return true;
   }
 
-  if (player.channelId !== channel.id) {
+  if (channel.id !== parsed.channelId) {
     await replyPrivate(interaction, "❌ Tu dois être dans le même salon vocal que le bot.");
     return true;
   }
 
-  switch (interaction.customId) {
-    case MUSIC_CONTROL_IDS.pause: {
+  const { action } = parsed;
+
+  switch (action) {
+    case "pause": {
       const changed = await player.pause();
       await replyPrivate(interaction, changed ? "⏸ Lecture mise en pause." : "ℹ️ La lecture n'est pas en cours.");
       return true;
     }
 
-    case MUSIC_CONTROL_IDS.resume: {
+    case "resume": {
       const changed = await player.resume();
       await replyPrivate(interaction, changed ? "▶️ Lecture reprise." : "ℹ️ La lecture n'est pas en pause.");
       return true;
     }
 
-    case MUSIC_CONTROL_IDS.skip: {
+    case "skip": {
       const skipped = await player.skip();
       await replyPrivate(interaction, skipped ? "⏭ Morceau ignoré." : "ℹ️ Aucun morceau à ignorer.");
       return true;
     }
 
-    case MUSIC_CONTROL_IDS.stop:
+    case "stop":
       await player.stop();
       await replyPrivate(interaction, "⏹ Lecture arrêtée et file d'attente vidée.");
       return true;
 
-    case MUSIC_CONTROL_IDS.voteskip: {
-      const voiceChannel = botVoiceChannel(interaction, player.channelId);
+    case "voteskip": {
+      const voiceChannel = botVoiceChannel(interaction, parsed.channelId);
       const humans = voiceChannel ? voiceChannel.members.filter((m) => !m.user.bot).size : 1;
       const threshold = computeSkipThreshold(humans, env.voteSkipMin, env.voteSkipRatio);
       const result = await player.voteSkip(interaction.user.id, threshold);
@@ -95,12 +97,27 @@ export async function handleMusicControl(
       return true;
     }
 
-    case MUSIC_CONTROL_IDS.volumeDown:
-    case MUSIC_CONTROL_IDS.volumeUp: {
-      const delta = interaction.customId === MUSIC_CONTROL_IDS.volumeUp ? env.volumeStep : -env.volumeStep;
+    case "voldown":
+    case "volup": {
+      const delta = action === "volup" ? env.volumeStep : -env.volumeStep;
       player.volume = player.volume + delta;
       await refreshNowPlaying(player);
       await replyPrivate(interaction, `🔊 Volume : **${player.volume}%**`);
+      return true;
+    }
+
+    case "seekback":
+    case "seekforward": {
+      const elapsed = Math.floor((player.playbackElapsedMs ?? 0) / 1000);
+      const delta = action === "seekforward" ? env.seekStepSeconds : -env.seekStepSeconds;
+      const target = Math.max(0, elapsed + delta);
+      const moved = await player.seek(target);
+      if (!moved) {
+        await replyPrivate(interaction, "ℹ️ Aucun morceau à déplacer.");
+        return true;
+      }
+      await refreshNowPlaying(player);
+      await replyPrivate(interaction, `⏩ Position : **${formatDuration(target)}**`);
       return true;
     }
 

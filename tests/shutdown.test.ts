@@ -11,12 +11,21 @@ function createMockLogger() {
   };
 }
 
-function createMockPlayerManager(activeGuildIds: string[] = []) {
+function createMockPlayerManager(
+  players: Array<{ guildId: string; lastTextChannelId?: string; channelId?: string }> = [],
+) {
   return {
-    activeGuildIds,
+    activePlayers: vi.fn().mockReturnValue(
+      players.map((player) => ({
+        guildId: player.guildId,
+        channelId: player.channelId ?? "chan-1",
+        lastTextChannelId: player.lastTextChannelId,
+      })),
+    ),
     destroyAll: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockReturnValue(null),
     flushSettings: vi.fn(),
+    flushQueues: vi.fn(),
   };
 }
 
@@ -50,7 +59,7 @@ describe("shutdown", () => {
 
   it("sends disconnect messages to active guilds", async () => {
     const logger = createMockLogger();
-    const players = createMockPlayerManager(["guild-1"]);
+    const players = createMockPlayerManager([{ guildId: "guild-1" }]);
     const client = createMockClient();
 
     const shutdown = createShutdown({ client: client as any, players: players as any, logger: logger as any });
@@ -64,7 +73,7 @@ describe("shutdown", () => {
 
   it("falls back to systemChannel when no lastTextChannelId", async () => {
     const logger = createMockLogger();
-    const players = createMockPlayerManager(["guild-1"]);
+    const players = createMockPlayerManager([{ guildId: "guild-1" }]);
     const systemChannel = {
       send: vi.fn().mockResolvedValue(undefined),
       isTextBased: () => true,
@@ -90,7 +99,7 @@ describe("shutdown", () => {
 
   it("handles send failure gracefully", async () => {
     const logger = createMockLogger();
-    const players = createMockPlayerManager(["guild-1"]);
+    const players = createMockPlayerManager([{ guildId: "guild-1" }]);
     const client = {
       guilds: {
         fetch: vi.fn().mockResolvedValue({
@@ -134,7 +143,7 @@ describe("shutdown", () => {
 
   it("is idempotent - calling twice does not send messages or destroy twice", async () => {
     const logger = createMockLogger();
-    const players = createMockPlayerManager(["guild-1"]);
+    const players = createMockPlayerManager([{ guildId: "guild-1" }]);
     const client = createMockClient();
 
     const shutdown = createShutdown({ client: client as any, players: players as any, logger: logger as any });

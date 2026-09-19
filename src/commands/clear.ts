@@ -12,6 +12,7 @@ export const clear: CommandDefinition = {
 
     const count = context.player.queue.size;
     context.player.queue.clear();
+    context.player.notifyQueueChange();
     await replyTemporary(
       interaction,
       count > 0 ? `🗑️ File vidée (${count} morceaux retirés).` : "ℹ️ La file était déjà vide.",
