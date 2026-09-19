@@ -12,8 +12,6 @@ services:
     environment:
       - DATA_DIR=/data
     volumes:
-      - .:/app
-      - /app/node_modules
       - pulse-data:/data
 
 volumes:
