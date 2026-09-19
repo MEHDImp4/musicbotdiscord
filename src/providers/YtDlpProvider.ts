@@ -86,6 +86,7 @@ export abstract class YtDlpProvider implements AudioProvider {
       "bestaudio/best",
       "-o",
       "-",
+      "--",
       track.webpageUrl,
     ];
 
@@ -162,7 +163,7 @@ export abstract class YtDlpProvider implements AudioProvider {
   protected async fetchInfo(target: string): Promise<YtDlpInfo> {
     const { stdout } = await runProcess(
       env.ytdlpPath,
-      [...this.metadataArgs(), "--dump-json", "--skip-download", target],
+      [...this.metadataArgs(), "--dump-json", "--skip-download", "--", target],
       { timeoutMs: env.externalProcessTimeoutMs },
     );
 
@@ -184,6 +185,7 @@ export abstract class YtDlpProvider implements AudioProvider {
         "--dump-single-json",
         "--playlist-end",
         String(Math.max(1, limit)),
+        "--",
         target,
       ],
       { timeoutMs: env.externalProcessTimeoutMs },
