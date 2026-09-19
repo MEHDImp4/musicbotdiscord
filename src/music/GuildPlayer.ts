@@ -559,26 +559,33 @@ export class GuildPlayer {
   }
 
   private async playNextInternal(finished?: Track): Promise<void> {
-    let next = decideNext(finished, this._loopMode, this.queue);
+    let previous = finished;
+    // Each pass consumes one queue entry or one autoplay slot; the cap guards
+    // against an unexpected retry cycle instead of recursing per failure.
+    const maxPasses = env.maxQueueSize + env.autoplayMaxConsecutive + 1;
 
-    if (!next && finished && this._autoplay) {
-      next = await this.resolveAutoplay(finished);
+    for (let pass = 0; pass < maxPasses; pass++) {
+      let next = decideNext(previous, this._loopMode, this.queue);
+
+      if (!next && previous && this._autoplay) {
+        next = await this.resolveAutoplay(previous);
+      }
+
+      if (!next) break;
+
+      try {
+        await this.startTrack(next);
+        return;
+      } catch (error) {
+        logger.warn({ err: error, guild: this.guildId, track: next.title }, "Skipping unreadable track");
+        this._currentTrack = undefined;
+        previous = undefined;
+      }
     }
 
-    if (!next) {
-      this._state = "IDLE";
-      this.notifyQueueChange();
-      this.scheduleIdleDisconnect();
-      return;
-    }
-
-    try {
-      await this.startTrack(next);
-    } catch (error) {
-      logger.warn({ err: error, guild: this.guildId, track: next.title }, "Skipping unreadable track");
-      this._currentTrack = undefined;
-      await this.playNextInternal();
-    }
+    this._state = "IDLE";
+    this.notifyQueueChange();
+    this.scheduleIdleDisconnect();
   }
 
   private async resolveAutoplay(seed: Track): Promise<Track | undefined> {
